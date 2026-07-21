@@ -2003,7 +2003,7 @@ function updateGeysers(dt){
   if(WORLD!=='moon'){if(geysers.length)clearGeysers();return;}
   geyserTimer-=dt;
   if(geyserTimer<=0){
-    geyserTimer=(7+Math.random()*7)/hazMult();
+    geyserTimer=(14+Math.random()*14)/hazMult();
     banner('⚠ DUST GEYSERS — STAY CLEAR!');
     beep(300,0.16,0.08);setTimeout(()=>beep(300,0.16,0.08),240);
     const n=hazCount();
@@ -2274,7 +2274,7 @@ function updateMeteors(dt){
   if(meteorWarn>0)meteorWarn-=dt;
   meteorTimer-=dt;
   if(meteorTimer<=0){
-    meteorTimer=(9+Math.random()*8)/hazMult();   // more frequent on harder worlds / story
+    meteorTimer=(18+Math.random()*16)/hazMult();   // more frequent on harder worlds / story
     triggerShower();
   }
   for(let i=meteors.length-1;i>=0;i--){
