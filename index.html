@@ -411,7 +411,7 @@ window.addEventListener('error',function(ev){
    Raise it if the world still feels too small, lower toward 1.0 to revert. */
 const OBJ_SCALE=1.35;
 const ASSETS={
-  saucer:{ url:'models/saucer.glb', scale:5.0, rotY:0,        yOffset:0   },
+  saucer:{ url:'models/saucer.glb', scale:5.0, rotY:0,        yOffset:0, seat:false },
   sheep: { url:'models/sheep.glb',  scale:1.0, rotY:Math.PI,  yOffset:0   },
   duck:  { url:'models/duck.glb',   scale:1.0, rotY:Math.PI,  yOffset:0   },
   camel: { url:'models/camel.glb',  scale:1.0, rotY:Math.PI,  yOffset:0   },
@@ -466,7 +466,14 @@ function loadGLB(name){
         } } });
       m.scale.setScalar(cfg.scale||1);
       m.rotation.y=cfg.rotY||0;
-      m.position.y=cfg.yOffset||0;
+      // auto-seat the model so its base sits at y=0 (Meshy pivots are centered, which buries props).
+      // Skip for the saucer (it flies) and creatures that get their own baseY handling.
+      if(cfg.seat!==false){
+        m.updateMatrixWorld(true);
+        const box=new THREE.Box3().setFromObject(m);
+        if(isFinite(box.min.y))m.position.y=-box.min.y;
+      }
+      m.position.y+=(cfg.yOffset||0);
       root.add(m);
       LOADED[name]=root;
       res(root);
