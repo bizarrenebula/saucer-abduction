@@ -283,9 +283,9 @@
     <div class="field">
       <div class="row"><span class="name">World</span><span class="out" id="oWorld">Earth</span></div>
       <div class="seg" id="segWorld">
-        <button data-w="earth" class="on">Earth</button>
-        <button data-w="moon">Moon</button>
-        <button data-w="mars">Mars</button>
+        <button data-w="earth" class="on">Earth · Easy</button>
+        <button data-w="moon">Moon · Medium</button>
+        <button data-w="mars">Mars · Hard</button>
       </div>
       <label class="chk" id="hiRow" style="margin-top:10px;display:none"><input type="checkbox" id="cHiDetail"> high detail — load 3D models (may run slow on phones)</label>
     </div>
@@ -2003,10 +2003,10 @@ function updateGeysers(dt){
   if(WORLD!=='moon'){if(geysers.length)clearGeysers();return;}
   geyserTimer-=dt;
   if(geyserTimer<=0){
-    geyserTimer=(7+Math.random()*7)*(S.storyMode?0.5:1);
+    geyserTimer=(7+Math.random()*7)/hazMult();
     banner('⚠ DUST GEYSERS — STAY CLEAR!');
     beep(300,0.16,0.08);setTimeout(()=>beep(300,0.16,0.08),240);
-    const n=S.storyMode?(6+((Math.random()*3)|0)):(3+((Math.random()*2)|0));   // 6–8 in story
+    const n=hazCount();
     const hitIdx=(Math.random()*n)|0;             // one erupts right under the ship's path
     for(let k=0;k<n;k++)setTimeout(()=>spawnGeyser(k===hitIdx),k*220);
   }
@@ -2117,10 +2117,10 @@ function updateLightning(dt){
   if(storming){
     lightningTimer-=dt;
     if(lightningTimer<=0){
-      lightningTimer=(7+Math.random()*7)*(S.storyMode?0.5:1);
+      lightningTimer=(7+Math.random()*7)/hazMult();
       banner('⚡ LIGHTNING STORM — TAKE COVER!');
       sfxThunderWarn();
-      const n=S.storyMode?(6+((Math.random()*3)|0)):(3+((Math.random()*2)|0));
+      const n=hazCount();
       const hitIdx=(Math.random()*n)|0;
       for(let k=0;k<n;k++)setTimeout(()=>spawnStrike(k===hitIdx),k*300);
     }
@@ -2157,6 +2157,15 @@ function updateLightning(dt){
       if(s.t>0.75){scene.remove(s.grp);strikes.splice(i,1);}
     }
   }
+}
+/* per-world difficulty: Earth easy (x1), Moon medium (geysers x1.5), Mars hard (meteors x2).
+   mult raises event frequency (shorter gap) and count-per-event. */
+const HAZARD_DIFFICULTY={earth:1, moon:1.5, mars:2};
+function hazMult(){return (HAZARD_DIFFICULTY[WORLD]||1)*(S.storyMode?2:1);}   // story mode still doubles on top
+function hazCount(){                                   // base 3–4, scaled and floored
+  const m=hazMult();
+  const base=3+((Math.random()*2)|0);
+  return Math.max(3,Math.round(base*m));
 }
 const meteors=[];
 const impacts=[];
@@ -2256,7 +2265,7 @@ function triggerShower(){
   meteorWarn=1.6;                                  // short telegraph before rocks fall
   banner('⚠ METEOR SHOWER — MOVE!');
   beep(300,0.18,0.09);setTimeout(()=>beep(300,0.18,0.09),260);setTimeout(()=>beep(300,0.18,0.09),520);
-  const n=S.storyMode?(6+((Math.random()*3)|0)):(3+((Math.random()*2)|0));   // 6–8 in story, else 3–4
+  const n=hazCount();
   const hitIdx=(Math.random()*n)|0;                // one is a bullseye on the ship
   for(let k=0;k<n;k++)setTimeout(()=>spawnMeteor(k===hitIdx),1600+k*260);
 }
@@ -2265,7 +2274,7 @@ function updateMeteors(dt){
   if(meteorWarn>0)meteorWarn-=dt;
   meteorTimer-=dt;
   if(meteorTimer<=0){
-    meteorTimer=(9+Math.random()*8)*(S.storyMode?0.5:1);   // 2x more often in story mode
+    meteorTimer=(9+Math.random()*8)/hazMult();   // more frequent on harder worlds / story
     triggerShower();
   }
   for(let i=meteors.length-1;i>=0;i--){
