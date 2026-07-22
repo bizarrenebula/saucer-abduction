@@ -13,7 +13,7 @@
 import { S } from '../core/state.js';
 import { SHIP_R } from '../core/constants.js';
 import { saucer } from './saucer.js';
-import { props, buildings } from '../entities/registry.js';
+import { props, buildings, vehicles } from '../entities/registry.js';
 import { BeamSFX } from '../audio/sfx.js';
 
 /* Only things nearer than this in X/Z are examined at all. Comfortably larger
@@ -44,8 +44,29 @@ function scan(list){
   return null;
 }
 
+/* Tall vehicles are obstacles, not hazards: the ship is pushed clear and its
+   momentum into them is cancelled. Nothing here ends the run — a bus should
+   stop you, not kill you. */
+function blockVehicles(){
+  for(let i=0;i<vehicles.length;i++){
+    const v=vehicles[i], u=v.userData;
+    if(!u.block||!v.visible||u.lift>0||u.fall>0)continue;
+    const dx=saucer.position.x-v.position.x, dz=saucer.position.z-v.position.z;
+    const r=(u.blockR||4)+SHIP_R;
+    const d2=dx*dx+dz*dz;
+    if(d2>r*r||d2<1e-6)continue;
+    // only if the hull actually overlaps the vehicle's height band
+    if(saucer.position.y-1.5>v.position.y+(u.blockH||3))continue;
+    const d=Math.sqrt(d2), nx=dx/d, nz=dz/d, push=r-d;
+    saucer.position.x+=nx*push; saucer.position.z+=nz*push;
+    const into=S.vel.x*nx+S.vel.z*nz;
+    if(into<0){S.vel.x-=into*nx;S.vel.z-=into*nz;}   // cancel motion into it
+  }
+}
+
 export function updateCollision(){
   if(S.state!=='playing')return;
+  blockVehicles();
   const o=scan(buildings)||scan(props);
   if(!o)return;
   S.crashReason='impact';

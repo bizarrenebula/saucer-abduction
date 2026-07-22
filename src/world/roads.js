@@ -1,0 +1,356 @@
+/* =========================================================================
+   ROADS — a real, routed road network built as geometry.
+
+   Earlier versions painted roads into the terrain shader. That could never
+   route around a mountain (the shader knows nothing about terrain), never lift
+   off the ground for a bridge, and always blended into the grass. So the road
+   is now a raised ribbon mesh whose centre line is planned here in JS.
+
+   NETWORK
+   Corridors still form a grid: roads run along X at every ROAD_S in Z, and
+   along Z at every ROAD_S in X. A corridor is identified by (axis, k).
+
+   ROUTING
+   The centre line is a pure function of t (the world coordinate along the
+   corridor's axis), so any chunk — and every vehicle — derives the identical
+   path without needing a shared starting point. The path is solved by a
+   dynamic program over candidate sideways offsets, in overlapping blocks;
+   see blockOffsets() for why a DP is required rather than a per-step search.
+
+   BRIDGES
+   Deck height follows smoothed terrain, but any span near water is lifted to
+   a fixed clearance above WATER_Y and the result smoothed again, so approach
+   ramps are gradual and the deck never touches the water.
+
+   Everything is cached per (axis,k,i); clearRoadCache() on reseed.
+   ========================================================================= */
+import { THREE } from '../core/three.js';
+import { WATER_Y } from '../core/constants.js';
+import { heightAt } from './terrain.js';
+
+export const ROAD_S    = 200;   // spacing between parallel corridors
+export const ROAD_HW   = 5.5;   // half-width of the carriageway
+export const ROAD_LANE = 2.3;   // lane centre offset (vehicles drive here)
+export const ROAD_LIFT = 0.30;  // deck sits this far proud of the ground
+export const STEP      = 6;     // path sample spacing along a road
+
+const MAXDEV   = 90;    // how far a road may slide sideways to dodge terrain
+const NCAND    = 45;    // candidate offsets (4u apart) -> caps the bend at ~34deg
+const TURN     = 0.3;   // penalty on lateral movement, per unit^2
+const BLOCK    = 48;    // steps solved per dynamic-programming block
+const MARGIN   = 32;    // look-ahead/behind steps shared with neighbouring blocks
+const SMOOTH_N = 3;     // final rounding of the chosen path
+const BRIDGE_CLEAR = 4.2;   // deck height above WATER_Y on a bridge
+const WATER_LOOK   = 4;     // steps either side that trigger a bridge span
+
+export function wob(t){ return Math.sin(t*0.011)*14 + Math.sin(t*0.023+1.7)*6; }
+
+/* ---------- caches ---------- */
+const cCell=new Map(), cBlock=new Map(), cOff=new Map(), cDeck=new Map();
+const key=(a,k,i)=>a+'|'+k+'|'+i;
+export function clearRoadCache(){ cCell.clear();cBlock.clear();cOff.clear();cDeck.clear();cEdge.clear();cWater.clear(); }
+
+/* Point on the corridor's nominal (unrouted) line. */
+function base(axis,k,t){
+  return axis==='x' ? {x:t, z:k+wob(t)} : {x:k+wob(t), z:t};
+}
+/* Apply a sideways offset d to a nominal point. */
+function shift(axis,p,d){
+  return axis==='x' ? {x:p.x, z:p.z+d} : {x:p.x+d, z:p.z};
+}
+const cand=n=>-MAXDEV+(2*MAXDEV)*n/(NCAND-1);
+
+/* Terrain cost of putting the road at candidate n, step i. */
+function cellCost(axis,k,i,n){
+  const kk=key(axis,k,i)+':'+n; let v=cCell.get(kk);
+  if(v!==undefined)return v;
+  const t=i*STEP, d=cand(n);
+  const p=shift(axis,base(axis,k,t),d);
+  const h=heightAt(p.x,p.z);
+  let c=0;
+  if(h>6)c+=Math.pow(h-6,1.45);        // climbing is expensive
+  if(h<WATER_Y)c+=26+(WATER_Y-h)*1.1;  // crossing water is a last resort, not banned
+  c+=d*d*0.004;                        // prefer to stay near the corridor
+  cCell.set(kk,c);return c;
+}
+
+/* Route one block with a dynamic program.
+
+   Choosing each step's offset independently does not work: either side of a
+   peak is equally good locally, so the choice flips and any smoothing of those
+   choices averages a left detour with a right detour and drives the road
+   straight over the summit. The DP instead costs a whole path, with a penalty
+   on lateral movement, so it commits to one side and stays there.
+
+   Blocks are solved with a generous MARGIN of shared context on each side, so
+   neighbouring blocks see the same obstacle and agree on which way round it —
+   without that, a seam appears wherever a block boundary lands mid-detour. */
+function blockOffsets(axis,k,b){
+  const bk=axis+'|'+k+'|'+b; let v=cBlock.get(bk);
+  if(v)return v;
+  const i0=b*BLOCK-MARGIN, i1=(b+1)*BLOCK+MARGIN, N=i1-i0+1;
+  const f=[],back=[];
+  for(let c=0;c<N;c++){f.push(new Float64Array(NCAND));back.push(new Int16Array(NCAND));}
+  for(let n=0;n<NCAND;n++)f[0][n]=cellCost(axis,k,i0,n);
+  for(let c=1;c<N;c++)for(let n=0;n<NCAND;n++){
+    let best=Infinity,bm=n;
+    // transitions limited to one candidate per step, which is what bounds the
+    // curve radius; the quadratic TURN term then discourages long diagonals
+    for(let m=Math.max(0,n-1);m<=Math.min(NCAND-1,n+1);m++){
+      const dd=cand(n)-cand(m);
+      const val=f[c-1][m]+TURN*dd*dd;
+      if(val<best){best=val;bm=m;}
+    }
+    f[c][n]=best+cellCost(axis,k,i0+c,n);back[c][n]=bm;
+  }
+  let bn=0,bc=Infinity;
+  for(let n=0;n<NCAND;n++)if(f[N-1][n]<bc){bc=f[N-1][n];bn=n;}
+  const path=new Int16Array(N);path[N-1]=bn;
+  for(let c=N-1;c>0;c--)path[c-1]=back[c][path[c]];
+  const out=new Float64Array(BLOCK);
+  for(let j=0;j<BLOCK;j++)out[j]=cand(path[MARGIN+j]);
+  cBlock.set(bk,out);return out;
+}
+function rawOffset(axis,k,i){
+  const b=Math.floor(i/BLOCK);
+  return blockOffsets(axis,k,b)[i-b*BLOCK];
+}
+/* Final rounding pass over the routed path. */
+function offsetAt(axis,k,i){
+  const kk=key(axis,k,i); let v=cOff.get(kk);
+  if(v!==undefined)return v;
+  let sum=0,wsum=0;
+  for(let j=-SMOOTH_N;j<=SMOOTH_N;j++){
+    const w=1-Math.abs(j)/(SMOOTH_N+1);
+    sum+=rawOffset(axis,k,i+j)*w;wsum+=w;
+  }
+  const o=sum/wsum;
+  cOff.set(kk,o);return o;
+}
+/* Centre-line point at step i, ground level (no deck lift). */
+function pathAt(axis,k,i){
+  const t=i*STEP;
+  return shift(axis,base(axis,k,t),offsetAt(axis,k,i));
+}
+/* ---------- deck: banked, following the relief ----------
+
+   The deck is NOT a flat ribbon at the highest ground under its width. That is
+   what produced the huge white embankment walls: on any cross-slope the whole
+   carriageway rode at the uphill edge's height and a tall skirt dropped to the
+   downhill side.
+
+   Instead each edge is carried at its OWN ground height, so the road banks with
+   the hillside and hugs the relief the way a real road cut does. A short skirt
+   is then all that is needed on land, and only genuine water spans lift into a
+   flat bridge deck. */
+
+/* Left/right edge world position at step i (side = +1 left, -1 right). */
+function edgePos(axis,k,i,side){
+  const p=pathAt(axis,k,i), pn=pathAt(axis,k,i+1);
+  let fx=pn.x-p.x, fz=pn.z-p.z; const l=Math.hypot(fx,fz)||1; fx/=l;fz/=l;
+  const nx=fz, nz=-fx;
+  return {x:p.x+nx*ROAD_HW*side, z:p.z+nz*ROAD_HW*side};
+}
+const cEdge=new Map();
+function edgeGround(axis,k,i,side){
+  const kk=key(axis,k,i)+':'+side; let v=cEdge.get(kk);
+  if(v!==undefined)return v;
+  const e=edgePos(axis,k,i,side);
+  const h=heightAt(e.x,e.z);
+  cEdge.set(kk,h);return h;
+}
+/* Is this span over water (and therefore a bridge)? */
+const cWater=new Map();
+function isWater(axis,k,i){
+  const kk=key(axis,k,i); let v=cWater.get(kk);
+  if(v!==undefined)return v;
+  let w=false;
+  for(let j=-WATER_LOOK;j<=WATER_LOOK&&!w;j++){
+    const p=pathAt(axis,k,i+j);
+    if(heightAt(p.x,p.z)<WATER_Y+0.6)w=true;
+  }
+  cWater.set(kk,w);return w;
+}
+/* Height of one deck edge: its own ground, smoothed along the road for a
+   gradual gradient, then clamped so it never sinks into that ground. Bridge
+   spans flatten both edges to a common clearance above the water. */
+function deckEdge(axis,k,i,side){
+  const kk=key(axis,k,i)+':'+side; let v=cDeck.get(kk);
+  if(v!==undefined)return v;
+  let sum=0,wsum=0;
+  for(let j=-3;j<=3;j++){
+    const w=1-Math.abs(j)/4;
+    sum+=edgeGround(axis,k,i+j,side)*w;wsum+=w;
+  }
+  let y=Math.max(sum/wsum, edgeGround(axis,k,i,side))+ROAD_LIFT;
+  if(isWater(axis,k,i)){
+    // flat deck across a bridge: both edges level, clear of the water
+    let m=-1e9;
+    for(let j=-2;j<=2;j++)
+      m=Math.max(m,edgeGround(axis,k,i+j,1),edgeGround(axis,k,i+j,-1));
+    y=Math.max(WATER_Y+BRIDGE_CLEAR, m+ROAD_LIFT);
+  }
+  cDeck.set(kk,y);return y;
+}
+/* Centre-line deck height — what vehicles and the ship ride on. */
+function deckSmooth(axis,k,i){
+  return (deckEdge(axis,k,i,1)+deckEdge(axis,k,i,-1))*0.5;
+}
+
+/* ---------- road surface texture ----------
+   Built here rather than in world/textures.js because the layout is tied to
+   ROAD_HW: U runs ACROSS the carriageway (0 = left shoulder, 1 = right), so
+   the stripes land at fixed world offsets no matter how the road meanders.
+   V repeats along the road, which is what makes the centre dashes march. */
+export const TILE_ALONG = 26;          // world units per vertical texture repeat
+const EDGE_LINE = ROAD_HW-1.3;
+
+export const roadTex=(function(){
+  const W=192,H=512,c=document.createElement('canvas');
+  c.width=W;c.height=H;const x=c.getContext('2d');
+  const u=off=>((off+ROAD_HW)/(2*ROAD_HW))*W;
+  x.fillStyle='#5b5f66';x.fillRect(0,0,W,H);                 // asphalt base
+  for(let i=0;i<9000;i++){                                    // aggregate speckle
+    const l=64+Math.random()*105,r=0.5+Math.random()*1.9;
+    x.fillStyle='rgba('+(l|0)+','+(l|0)+','+(l*1.05|0)+','+(0.14+Math.random()*0.34)+')';
+    x.beginPath();x.arc(Math.random()*W,Math.random()*H,r,0,7);x.fill();
+  }
+  for(let i=0;i<20;i++){                                      // tar patches
+    x.fillStyle='rgba(46,49,54,'+(0.14+Math.random()*0.2)+')';
+    x.beginPath();x.ellipse(Math.random()*W,Math.random()*H,8+Math.random()*26,10+Math.random()*40,Math.random()*3,0,7);x.fill();
+  }
+  for(let i=0;i<7;i++){                                       // repair seams
+    x.strokeStyle='rgba(40,42,47,0.5)';x.lineWidth=1+Math.random()*1.5;
+    x.beginPath();let py=Math.random()*H;x.moveTo(0,py);
+    for(let k=0;k<5;k++){py+=(Math.random()-0.5)*40;x.lineTo(W*(k+1)/5,py);}x.stroke();
+  }
+  x.fillStyle='rgba(30,28,24,0.55)';                          // gritty shoulders
+  x.fillRect(0,0,u(-ROAD_HW+0.9),H);x.fillRect(u(ROAD_HW-0.9),0,W,H);
+  x.fillStyle='#cfcbb6';                                      // solid edge stripes
+  for(const o of [-EDGE_LINE,EDGE_LINE])x.fillRect(u(o)-2.5,0,5,H);
+  for(let y=0;y<H;y+=256)x.fillRect(u(0)-3,y,6,150);          // dashed centre line
+  x.globalCompositeOperation='multiply';                      // wear the paint back
+  for(let i=0;i<2200;i++){
+    const l=110+Math.random()*145;
+    x.fillStyle='rgba('+(l|0)+','+(l|0)+','+(l|0)+',0.30)';
+    x.fillRect(Math.random()*W,Math.random()*H,2,2);
+  }
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=THREE.ClampToEdgeWrapping;      // never wrap across the width
+  t.wrapT=THREE.RepeatWrapping;           // repeat along the length
+  t.anisotropy=16;
+  return t;
+})();
+
+/* ---------- public sampling (used by vehicles) ---------- */
+/* Position + heading on the centre line at world coordinate t along the axis. */
+export function roadSample(axis,k,t){
+  const fi=t/STEP, i=Math.floor(fi), f=fi-i;
+  const a=pathAt(axis,k,i), b=pathAt(axis,k,i+1);
+  const x=a.x+(b.x-a.x)*f, z=a.z+(b.z-a.z)*f;
+  const ya=deckSmooth(axis,k,i), yb=deckSmooth(axis,k,i+1);
+  const y=ya+(yb-ya)*f;
+  let fx=b.x-a.x, fz=b.z-a.z;
+  const l=Math.hypot(fx,fz)||1; fx/=l; fz/=l;
+  return {x,z,y,fx,fz};
+}
+
+/* Deck height at an arbitrary world point, or -Infinity if not over a road.
+
+   Cheap because a corridor's path parameter IS the world coordinate along its
+   axis: only the handful of corridors whose k could reach this point need
+   testing, and each is a single sample. Used so the ship rides over roads and
+   bridges instead of through them. */
+export function roadHeightAt(x,z){
+  let best=-Infinity;
+  for(const axis of ['x','z']){
+    const c=(axis==='x')?z:x, t=(axis==='x')?x:z;
+    const k0=Math.ceil((c-MAXDEV-ROAD_HW)/ROAD_S)*ROAD_S;
+    for(let k=k0;k<=c+MAXDEV+ROAD_HW;k+=ROAD_S){
+      const sp=roadSample(axis,k,t);
+      const dx=sp.x-x, dz=sp.z-z;
+      if(dx*dx+dz*dz<(ROAD_HW+1.2)*(ROAD_HW+1.2))best=Math.max(best,sp.y);
+    }
+  }
+  return best;
+}
+
+/* ---------- which corridors touch a chunk ---------- */
+export function roadsNear(ox,oz,size){
+  const out=[], pad=MAXDEV+22;
+  for(const axis of ['x','z']){
+    const lo=(axis==='x'?oz:ox)-pad, hi=(axis==='x'?oz:ox)+size+pad;
+    const k0=Math.ceil(lo/ROAD_S), k1=Math.floor(hi/ROAD_S);
+    for(let n=k0;n<=k1;n++)out.push({axis,k:n*ROAD_S});
+  }
+  return out;
+}
+
+/* ---------- mesh ---------- */
+/* Ribbon deck + vertical skirts, so the road reads as a raised surface with
+   thickness rather than a decal blended into the grass. Bridge spans also get
+   piers dropped to the riverbed. */
+export function buildRoadMesh(axis,k,t0,t1,deckMat,pierMat){
+  const i0=Math.floor(t0/STEP)-1, i1=Math.ceil(t1/STEP)+1;
+  const pos=[],uv=[],idx=[];
+  const SKIRT=0.5, MAXSKIRT=3.0;    // banked deck means the skirt stays short
+  let along=0, vbase=0;
+  const grp=new THREE.Group();
+
+  for(let i=i0;i<=i1;i++){
+    const p=pathAt(axis,k,i);
+    const pn=pathAt(axis,k,i+1);
+    let fx=pn.x-p.x, fz=pn.z-p.z; const l=Math.hypot(fx,fz)||1; fx/=l;fz/=l;
+    const nx=fz, nz=-fx;                       // left normal
+    // Each edge sits at its own height, so the deck banks with the hillside
+    // instead of riding flat at the uphill edge on a tall embankment.
+    const lx=p.x+nx*ROAD_HW, lz=p.z+nz*ROAD_HW;
+    const rx=p.x-nx*ROAD_HW, rz=p.z-nz*ROAD_HW;
+    const ly=deckEdge(axis,k,i,1), ry=deckEdge(axis,k,i,-1);
+    const y=(ly+ry)*0.5;
+    // Skirt reaches the ground under its own edge; capped, past which the span
+    // is a real bridge and gets piers instead of an ever-taller wall.
+    const lb=Math.max(Math.min(ly-SKIRT,heightAt(lx,lz)-0.25), ly-MAXSKIRT);
+    const rb=Math.max(Math.min(ry-SKIRT,heightAt(rx,rz)-0.25), ry-MAXSKIRT);
+    pos.push(lx, ly, lz);
+    pos.push(rx, ry, rz);
+    pos.push(lx, lb, lz);
+    pos.push(rx, rb, rz);
+    uv.push(0,along, 1,along, 0,along, 1,along);
+    if(i>i0){
+      const a=vbase-4, b=vbase;
+      // Winding matters: with the deck wound the other way its normal points
+      // DOWN and the whole carriageway is backface-culled, leaving only the
+      // skirts visible edge-on — a thin dark line instead of a road.
+      idx.push(a,a+1,b,  b,a+1,b+1);           // deck (faces up)
+      idx.push(a+2,b+2,a, a,b+2,b);            // outer skirt
+      idx.push(a+1,a+3,b+1, a+3,b+3,b+1);      // inner skirt
+    }
+    vbase+=4;
+    along+=STEP/TILE_ALONG;
+
+    // A pier goes in exactly where the embankment ran out of reach — i.e. both
+    // skirts hit the MAXSKIRT cap and the deck is genuinely spanning a gap.
+    // Deriving it from the same number the skirts use keeps pillars off dry
+    // ground, where an earlier independent threshold scattered them.
+    if(i%4===0 && lb<=ly-MAXSKIRT+1e-6 && rb<=ry-MAXSKIRT+1e-6){
+      const gh=Math.min(heightAt(p.x,p.z),heightAt(lx,lz),heightAt(rx,rz));
+      const hgt=y-gh;
+      if(hgt>MAXSKIRT){
+        const pier=new THREE.Mesh(new THREE.BoxGeometry(1.1,hgt,1.1),pierMat);
+        pier.position.set(p.x,gh+hgt/2,p.z);
+        pier.rotation.y=Math.atan2(fx,fz);
+        grp.add(pier);
+      }
+    }
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const deck=new THREE.Mesh(geo,deckMat);
+  deck.receiveShadow=true;
+  grp.add(deck);
+  return grp;
+}

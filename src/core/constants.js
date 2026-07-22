@@ -80,4 +80,17 @@ export const ASSETS = {
   barn:    { url:'models/barn.glb',      scale:2.0, rotY:0,        yOffset:0 },
   hiker:   { url:'models/hiker.glb',     scale:1.0, rotY:0,        yOffset:0 },
   tree:    { url:'models/tree.glb',      scale:2.0, rotY:0,        yOffset:0 },
+  // Roadside set. Missing files degrade to the procedural shapes in
+  // entities/vehicles.js and entities/stations.js, so these can be dropped in
+  // later without any code change. Vehicles move, so their rotY must leave the
+  // nose at +Z — see the FACING CONVENTION note above.
+  gas_station:{ url:'models/gas_station.glb', scale:2.2, rotY:0,   yOffset:0 },
+  car1:    { url:'models/car1.glb',      scale:1.0, rotY:0,        yOffset:0 },
+  car2:    { url:'models/car2.glb',      scale:1.0, rotY:0,        yOffset:0 },
+  bus1:    { url:'models/bus1.glb',      scale:1.0, rotY:0,        yOffset:0 },
 };
+
+/* Roadside population, per chunk that contains road. */
+export const VEH_PER_CHUNK = 1;      // attempts per road-bearing chunk (~55% take)
+export const VEH_STOP_R    = 26;     // ship within this radius -> traffic halts
+export const STATION_CHANCE= 0.10;   // chance a road-bearing chunk gets a station

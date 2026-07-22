@@ -83,12 +83,21 @@ export function updateHuman(a,u,dt){
     u.fleeT-=dt;
     let tx=a.position.x+dx/d*12, tz=a.position.z+dz/d*12;   // default: away
     let best=null,bd=70;
-    for(const s of shelters){
-      const sx=s.x-a.position.x,sz2=s.z-a.position.z;
-      const sd=Math.hypot(sx,sz2);
-      if(sd<bd){bd=sd;best=s;}
+    // Forecourt NPCs panic and scatter instead of filing into a shelter: each
+    // keeps a fixed random deflection so a group bursts apart rather than
+    // running as one column. u.bolt is re-rolled each time panic starts.
+    if(u.scatter){
+      if(u.bolt==null)u.bolt=(Math.random()*2-1)*1.5;
+      const ang=Math.atan2(dx,dz)+u.bolt;
+      tx=a.position.x+Math.sin(ang)*14; tz=a.position.z+Math.cos(ang)*14;
+    }else{
+      for(const s of shelters){
+        const sx=s.x-a.position.x,sz2=s.z-a.position.z;
+        const sd=Math.hypot(sx,sz2);
+        if(sd<bd){bd=sd;best=s;}
+      }
+      if(best){tx=best.x;tz=best.z;}
     }
-    if(best){tx=best.x;tz=best.z;}
     const mx=tx-a.position.x,mz=tz-a.position.z,ml=Math.hypot(mx,mz)||1;
     a.position.x+=mx/ml*u.speed*dt;
     a.position.z+=mz/ml*u.speed*dt;
@@ -96,6 +105,7 @@ export function updateHuman(a,u,dt){
     a.rotation.y=Math.atan2(mx,mz);
     if(best&&bd<2.4){u.hidden=7+Math.random()*4;a.visible=false;u.progress=0;}
   }else{
+    u.bolt=null;                                                     // re-roll next panic
     a.position.y=heightAt(a.position.x,a.position.z);
     a.rotation.y+=Math.sin(performance.now()*0.0005+u.face)*0.004;   // idle
   }

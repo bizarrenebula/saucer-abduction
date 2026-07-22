@@ -106,7 +106,7 @@ export function spawnModel(name){                 // fresh clone for one entity,
    when something is missing, so they go to the console rather than the splash.
    A count is kept because the GLB set is large and a static string would look
    hung; it collapses to a single label once everything has resolved. */
-export const ASSET_COUNT=12;      // the GLB + texture loads tracked below
+export const ASSET_COUNT=16;      // the GLB + texture loads tracked below
 let diagDone=0;
 function diagLine(){return document.getElementById('splashLine');}
 (function diagInit(){
@@ -138,6 +138,10 @@ export function loadAllAssets(){
     loadGLB('barn').then(r=>diagSet('barn',!!r)),
     loadGLB('hiker').then(r=>diagSet('hiker',!!r)),
     loadGLB('tree').then(r=>diagSet('tree',!!r)),
+    loadGLB('gas_station').then(r=>diagSet('gas_station',!!r)),
+    loadGLB('car1').then(r=>diagSet('car1',!!r)),
+    loadGLB('car2').then(r=>diagSet('car2',!!r)),
+    loadGLB('bus1').then(r=>diagSet('bus1',!!r)),
     loadTex('grass').then(r=>diagSet('grass',!!r)),
     loadTex('mountain').then(r=>diagSet('mountain',!!r)),
     loadTex('sand').then(r=>diagSet('sand',!!r))

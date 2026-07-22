@@ -5,17 +5,20 @@
    ========================================================================= */
 import { THREE } from '../core/three.js';
 import { env } from '../core/env.js';
-import { CHUNK, SEG, WATER_Y, GROUND_TILING } from '../core/constants.js';
+import { CHUNK, SEG, WATER_Y, GROUND_TILING, VEH_PER_CHUNK, STATION_CHANCE } from '../core/constants.js';
 import { scene } from '../core/engine.js';
 import { World } from './world-config.js';
 import { sample } from './terrain.js';
 import { TEX, grassTex, sandTex, rockTex, snowTex } from './textures.js';
-import { animals, pickups, props, buildings, shelters } from '../entities/registry.js';
+import { ROAD_HW, STEP, roadsNear, roadSample, buildRoadMesh, clearRoadCache, roadTex } from './roads.js';
+import { animals, pickups, props, buildings, vehicles, shelters } from '../entities/registry.js';
 import { buildAnimal } from '../entities/animals.js';
 import { buildAlien } from '../entities/aliens.js';
 import { buildCrystal } from '../entities/crystals.js';
 import { buildProp } from '../entities/props.js';
 import { buildBuilding, buildHuman } from '../entities/humans.js';
+import { buildStation } from '../entities/stations.js';
+import { buildVehicle, placeVehicle } from '../entities/vehicles.js';
 
 const LOW_END = env.LOW_END;
 
@@ -28,11 +31,25 @@ groundMat.onBeforeCompile=sh=>{
   // vDuv stays the raw 0..1 chunk UV; each texture applies its own tiling at
   // sample time so they can be scaled independently (see GROUND_TILING).
   const T=n=>GROUND_TILING[n].toFixed(1);
+  groundMat.userData.sh=sh;
   sh.vertexShader='attribute float aBiome;varying float vBiome;varying vec2 vDuv;\n'+sh.vertexShader
     .replace('#include <uv_vertex>','#include <uv_vertex>\nvBiome=aBiome;vDuv=uv;');
   sh.fragmentShader='uniform sampler2D tGrass;uniform sampler2D tSand;uniform sampler2D tRock;uniform sampler2D tSnow;varying float vBiome;varying vec2 vDuv;\n'+sh.fragmentShader
-    .replace('#include <color_fragment>','#include <color_fragment>\n{\nvec3 tg=texture2D(tGrass,vDuv*'+T('grass')+').rgb;vec3 ts=texture2D(tSand,vDuv*'+T('sand')+').rgb;vec3 tr=texture2D(tRock,vDuv*'+T('rock')+').rgb;vec3 tn=texture2D(tSnow,vDuv*'+T('snow')+').rgb;\nfloat w1=clamp(1.0-abs(vBiome-1.0),0.0,1.0);float w2=clamp(1.0-abs(vBiome-2.0),0.0,1.0);float w3=clamp(vBiome-2.0,0.0,1.0);float w0=clamp(1.0-vBiome,0.0,1.0);\nvec3 tc=(tg*w0+ts*w1+tr*w2+tn*w3)/max(w0+w1+w2+w3,0.001);\ndiffuseColor.rgb*=mix(vec3(1.0),tc*2.05,0.9);\n}');
+    .replace('#include <color_fragment>','#include <color_fragment>\n{\n'
+      +'vec3 tg=texture2D(tGrass,vDuv*'+T('grass')+').rgb;vec3 ts=texture2D(tSand,vDuv*'+T('sand')+').rgb;vec3 tr=texture2D(tRock,vDuv*'+T('rock')+').rgb;vec3 tn=texture2D(tSnow,vDuv*'+T('snow')+').rgb;\n'
+      +'float w1=clamp(1.0-abs(vBiome-1.0),0.0,1.0);float w2=clamp(1.0-abs(vBiome-2.0),0.0,1.0);float w3=clamp(vBiome-2.0,0.0,1.0);float w0=clamp(1.0-vBiome,0.0,1.0);\n'
+      +'vec3 tc=(tg*w0+ts*w1+tr*w2+tn*w3)/max(w0+w1+w2+w3,0.001);\n'
+      +'diffuseColor.rgb*=mix(vec3(1.0),tc*2.05,0.9);\n}');
 };
+
+/* Road surface. A separate raised mesh, so it never blends with the ground.
+   The terrain shader multiplies its texture by ~2.05; without a matching lift
+   the deck reads as a black slash across a bright landscape, so the material
+   colour is used as a >1 multiplier on the map. */
+const roadMat=new THREE.MeshStandardMaterial({map:roadTex,roughness:0.93,metalness:0.02,side:THREE.DoubleSide});
+roadMat.color.setScalar(1.85);
+const pierMat=new THREE.MeshStandardMaterial({color:0x53565c,roughness:0.95});
+pierMat.color.multiplyScalar(1.5);
 
 export function buildChunk(cx,cz){
   const geo=new THREE.PlaneGeometry(CHUNK,CHUNK,SEG,SEG);
@@ -133,10 +150,75 @@ export function buildChunk(cx,cz){
       scene.add(hu);animals.push(hu);spawned.push(hu);
     }
   }
-  chunks.set(chunkKey(cx,cz),{mesh,animals:spawned,pickups:pk,props:pr,builds:bl,shel:sh});
+  /* ---- roads: deck geometry, then roadside population (Earth only) ---- */
+  const vh=[],rd=[];
+  if(World.name==='earth'){
+    for(const c of roadsNear(ox,oz,CHUNK)){
+      // t-range of this corridor that overlaps the chunk, padded so decks from
+      // neighbouring chunks meet without a visible seam.
+      const t0=(c.axis==='x'?ox:oz)-STEP, t1=(c.axis==='x'?ox+CHUNK:oz+CHUNK)+STEP;
+      // Does the routed line actually enter this chunk? A corridor can be
+      // pulled far enough sideways dodging a mountain that it misses entirely.
+      let inside=false;
+      for(let t=t0;t<=t1&&!inside;t+=STEP){
+        const sp=roadSample(c.axis,c.k,t);
+        if(sp.x>=ox-6&&sp.x<=ox+CHUNK+6&&sp.z>=oz-6&&sp.z<=oz+CHUNK+6)inside=true;
+      }
+      if(!inside)continue;
+      const m=buildRoadMesh(c.axis,c.k,t0,t1,roadMat,pierMat);
+      scene.add(m);rd.push(m);
+
+      // one station per chunk at most, beside this road
+      if(Math.random()<STATION_CHANCE&&!bl.some(o=>o.userData.station)){
+        const t=t0+Math.random()*(t1-t0);
+        const sp=roadSample(c.axis,c.k,t);
+        const side=Math.random()<0.5?1:-1, off=ROAD_HW+8;
+        const sx=sp.x+sp.fz*off*side, sz=sp.z-sp.fx*off*side;
+        const sm2=sample(sx,sz);
+        if(sm2.biome!=='water'&&sm2.biome!=='mountain'&&sm2.h>WATER_Y+1){
+          const st=buildStation();
+          st.position.set(sx,sm2.h,sz);
+          st.rotation.y=Math.atan2(-sp.fz*side,sp.fx*side);   // forecourt toward the road
+          scene.add(st);bl.push(st);buildings.push(st);
+          const shel={x:sx,z:sz};shelters.push(shel);sh.push(shel);
+          const nh=2+((Math.random()*2)|0);
+          for(let h=0;h<nh;h++){
+            const hx=sx+(Math.random()-0.5)*11, hz=sz+(Math.random()-0.5)*11;
+            const sm3=sample(hx,hz);
+            if(sm3.biome==='water')continue;
+            const hu=buildHuman('villager');
+            hu.userData.scatter=1;
+            hu.position.set(hx,sm3.h,hz);hu.rotation.y=hu.userData.face;
+            scene.add(hu);animals.push(hu);spawned.push(hu);
+          }
+        }
+      }
+      // traffic
+      for(let i=0;i<VEH_PER_CHUNK;i++){
+        if(Math.random()<0.45)continue;
+        const t=t0+Math.random()*(t1-t0);
+        const roll=Math.random();
+        const kind=roll<0.45?'car1':roll<0.8?'car2':'bus1';
+        const v=buildVehicle(kind);
+        placeVehicle(v,c.axis,c.k,t,Math.random()<0.5?1:-1);
+        scene.add(v);vh.push(v);
+      }
+    }
+  }
+  chunks.set(chunkKey(cx,cz),{mesh,animals:spawned,pickups:pk,props:pr,builds:bl,shel:sh,vehs:vh,roads:rd});
 }
 
 export function updateChunks(px,pz){
+  // The ground material compiles once and is shared, so anything that changes
+  // after that has to be pushed through its uniforms rather than a rebuild:
+  // the road gate when the world changes, and the texture handles when the
+  // high-detail toggle loads custom images mid-session.
+  const sh=groundMat.userData.sh;
+  if(sh&&sh.uniforms.tGrass){
+    if(TEX.grass)   sh.uniforms.tGrass.value=TEX.grass;
+    if(TEX.sand)    sh.uniforms.tSand.value =TEX.sand;
+    if(TEX.mountain)sh.uniforms.tRock.value =TEX.mountain;
+  }
   const ccx=Math.round(px/CHUNK), ccz=Math.round(pz/CHUNK);
   const VIEW_R=env.VIEW_R;
   // add
@@ -153,6 +235,8 @@ export function updateChunks(px,pz){
       c.pickups.forEach(o=>{scene.remove(o);const idx=pickups.indexOf(o);if(idx>=0)pickups.splice(idx,1);});
       c.props.forEach(o=>{scene.remove(o);const idx=props.indexOf(o);if(idx>=0)props.splice(idx,1);});
       c.builds.forEach(o=>{scene.remove(o);const idx=buildings.indexOf(o);if(idx>=0)buildings.splice(idx,1);});
+      (c.vehs||[]).forEach(o=>{scene.remove(o);const idx=vehicles.indexOf(o);if(idx>=0)vehicles.splice(idx,1);});
+      (c.roads||[]).forEach(o=>{scene.remove(o);o.traverse(q=>{if(q.geometry)q.geometry.dispose();});});
       c.shel.forEach(s=>{const idx=shelters.indexOf(s);if(idx>=0)shelters.splice(idx,1);});
       chunks.delete(k);
     }
@@ -163,6 +247,9 @@ export function clearWorld(){
     c.animals.forEach(a=>scene.remove(a));
     c.pickups.forEach(o=>scene.remove(o));
     c.props.forEach(o=>scene.remove(o));
-    c.builds.forEach(o=>scene.remove(o));}
-  chunks.clear();animals.length=0;pickups.length=0;props.length=0;buildings.length=0;shelters.length=0;
+    c.builds.forEach(o=>scene.remove(o));
+    (c.vehs||[]).forEach(o=>scene.remove(o));
+    (c.roads||[]).forEach(o=>{scene.remove(o);o.traverse(q=>{if(q.geometry)q.geometry.dispose();});});}
+  clearRoadCache();
+  chunks.clear();animals.length=0;pickups.length=0;props.length=0;buildings.length=0;vehicles.length=0;shelters.length=0;
 }

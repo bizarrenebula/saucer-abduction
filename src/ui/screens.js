@@ -3,7 +3,6 @@
    the landing (login/free) screens, world/reactor/mode pickers, music volume,
    and the high-detail asset opt-in. Owns startGame() and endGame().
    ========================================================================= */
-import { env } from '../core/env.js';
 import { S } from '../core/state.js';
 import { HOVER_BASE } from '../core/constants.js';
 import { input } from '../core/input.js';
@@ -21,7 +20,6 @@ import { resetLightning } from '../hazards/lightning.js';
 import { Story, storyProceed } from '../story/story.js';
 import { Music, TRACK_BY_WORLD } from '../audio/music.js';
 import { BeamSFX } from '../audio/sfx.js';
-import { loadAllAssets, spawnModel } from '../assets.js';
 import { banner } from './banner.js';
 import { setFX } from './postfx.js';
 import { scoreV, specV, spBtn } from './dom.js';
@@ -129,6 +127,7 @@ sMusicVol.addEventListener('input',()=>Music.setVolume(+sMusicVol.value/100));
 /* ---------- world + reactor + mode selection ---------- */
 document.getElementById('segWorld').addEventListener('click',e=>{
   const b=e.target.closest('[data-w]');if(!b)return;
+  if(b.disabled||b.classList.contains('locked'))return;   // Moon/Mars not playable yet
   S.world=b.dataset.w;
   document.querySelectorAll('#segWorld [data-w]').forEach(x=>x.classList.toggle('on',x===b));
   document.getElementById('oWorld').textContent=t('world.'+S.world);
@@ -148,50 +147,12 @@ document.getElementById('segMode').addEventListener('click',e=>{
 });
 document.getElementById('stBtn').addEventListener('click',storyProceed);
 
-/* ---------- landing screen: login (under construction) / play for free ---------- */
-document.getElementById('loginBtn').addEventListener('click',()=>{
-  document.getElementById('landingScreen').classList.add('hidden');
-  document.getElementById('constructScreen').classList.remove('hidden');
-});
-document.getElementById('backBtn').addEventListener('click',()=>{
-  document.getElementById('constructScreen').classList.add('hidden');
-  document.getElementById('landingScreen').classList.remove('hidden');
-});
-document.getElementById('freeBtn').addEventListener('click',()=>{
-  document.getElementById('landingScreen').classList.add('hidden');
-  document.getElementById('constructScreen').classList.add('hidden');
-  document.getElementById('startScreen').classList.remove('hidden');
-});
+/* The splash now hands straight to the setup screen — no landing gate. */
 
 /* single tuned graphics mode — auto-drops to basic only if the GPU rejects post-fx */
 setFX('full');
 
-/* high-detail opt-in (mobile only — desktop already loads everything) */
-if(env.LOW_END){
-  const row=document.getElementById('hiRow');if(row)row.style.display='flex';
-}
-document.getElementById('cHiDetail').addEventListener('change',e=>{
-  if(e.target.checked && !env.HI_DETAIL){
-    env.HI_DETAIL=true;
-    e.target.disabled=true;
-    const lbl=e.target.parentElement;
-    const txt=lbl.childNodes[lbl.childNodes.length-1];
-    if(txt)txt.textContent=t('hi.loading');
-    // block Play until every model + texture is in, so the run starts fully equipped
-    const btn=document.getElementById('startBtn');
-    const note=document.getElementById('loadNote');
-    if(btn)btn.disabled=true;
-    if(note)note.textContent=t('loadNote.loadingHi');
-    loadAllAssets().then(()=>{
-      if(txt)txt.textContent=t('hi.loaded');
-      const sm=spawnModel('saucer');
-      if(sm){(saucer.userData.procBody||[]).forEach(o=>o.visible=false);
-        sm.name="saucerModel";saucer.add(sm);}   /* keep rim lights for night blink */
-      if(btn)btn.disabled=false;
-      if(note)note.textContent=t('loadNote.ready');
-    });
-  }
-});
+/* Asset quality is decided by the device in core/env.js — no toggle here. */
 
 /* ---------- language switch (landing + settings) ---------- */
 document.querySelectorAll('[data-lang]').forEach(b=>b.addEventListener('click',()=>setLang(b.getAttribute('data-lang'))));

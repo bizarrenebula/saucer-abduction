@@ -235,6 +235,11 @@
     background:rgba(255,255,255,.03);color:var(--ink-soft);font-family:inherit;font-size:10px;
     letter-spacing:.14em;text-transform:uppercase;cursor:pointer;transition:.15s}
   .seg button:hover{color:var(--ink)}
+  /* Moon/Mars are not playable yet: dimmed, struck through, not clickable. */
+  .seg button.locked{opacity:.34;cursor:not-allowed;text-decoration:line-through;
+    text-decoration-thickness:1px}
+  .seg button.locked:hover{color:var(--ink-soft)}
+  .seg button.locked::after{content:' \1F512';text-decoration:none;font-size:9px}
   .seg button.on{background:linear-gradient(180deg,#7dffc0,var(--beam));color:#04160f;
     box-shadow:0 0 16px rgba(89,255,176,.4);border-color:transparent;font-weight:700}
 
@@ -318,38 +323,7 @@
 </div>
 
 <!-- LANDING SCREEN -->
-<div class="screen" id="landingScreen">
-  <div class="card" style="text-align:center">
-    <div class="eyebrow" data-i18n="eyebrow.protocol">night harvest protocol</div>
-    <h1>ABDUCT<span class="g">OR</span></h1>
-    <div class="sub" style="text-align:center" data-i18n-html="landing.sub">Pilot the saucer. Harvest the wilds under cover of dark.<br>Three worlds. Three difficulties. One beam.</div>
-    <div class="howto">
-      <div class="howto-h" data-i18n="landing.how.title">how to play</div>
-      <div class="howto-t" data-i18n-html="landing.goal"></div>
-      <div class="howto-t" data-i18n-html="landing.how"></div>
-      <div class="howto-t" data-i18n-html="landing.modes"></div>
-    </div>
-    <button class="go" id="freeBtn" style="margin-top:8px" data-i18n="landing.free">play for free</button>
-    <button class="go ghost" id="loginBtn" style="margin-top:12px" data-i18n="landing.login">login</button>
-    <div class="langRow"><span class="langLbl" data-i18n="lang.label">Language</span>
-      <div class="seg langSel">
-        <button data-lang="en">EN</button><button data-lang="ru">RU</button><button data-lang="bg">BG</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- UNDER CONSTRUCTION -->
-<div class="screen hidden" id="constructScreen">
-  <div class="card" style="text-align:center">
-    <div class="eyebrow" data-i18n="eyebrow.accounts">accounts</div>
-    <h1 style="font-size:26px" data-i18n-html="construct.title">UNDER <span class="g">CONSTRUCTION</span></h1>
-    <div class="sub" style="text-align:center" data-i18n-html="construct.sub">Login isn't ready yet — this feature is still being built.<br>For now, jump straight in and play for free.</div>
-    <button class="go" id="backBtn" style="margin-top:8px" data-i18n="construct.back">back</button>
-  </div>
-</div>
-
-<div class="screen hidden" id="startScreen">
+<div class="screen" id="startScreen">
   <div class="card">
     <div class="eyebrow" data-i18n="eyebrow.protocol">night harvest protocol</div>
     <h1>ABDUCT<span class="g">OR</span></h1>
@@ -368,10 +342,9 @@
       <div class="row"><span class="name" data-i18n="field.world">World</span><span class="out" id="oWorld">Earth</span></div>
       <div class="seg" id="segWorld">
         <button data-w="earth" class="on" data-i18n="world.earthEasy">Earth · Easy</button>
-        <button data-w="moon" data-i18n="world.moonMed">Moon · Medium</button>
-        <button data-w="mars" data-i18n="world.marsHard">Mars · Hard</button>
+        <button data-w="moon" class="locked" disabled data-i18n="world.moonMed">Moon · Medium</button>
+        <button data-w="mars" class="locked" disabled data-i18n="world.marsHard">Mars · Hard</button>
       </div>
-      <label class="chk" id="hiRow" style="margin-top:10px;display:none"><input type="checkbox" id="cHiDetail"> <span data-i18n="opt.hiDetail">high detail — load 3D models (may run slow on phones)</span></label>
     </div>
 
     <div class="field">
@@ -411,8 +384,19 @@
 
 
     <div class="ctrl" id="ctrlHint"></div>
+    <div class="howto">
+      <div class="howto-h" data-i18n="landing.how.title">how to play</div>
+      <div class="howto-t" data-i18n-html="landing.goal"></div>
+      <div class="howto-t" data-i18n-html="landing.how"></div>
+      <div class="howto-t" data-i18n-html="landing.modes"></div>
+    </div>
     <button class="go" id="startBtn" disabled data-i18n="btn.play">play</button>
     <div class="loading" id="loadNote" style="margin-top:12px" data-i18n="loadNote.loading">loading assets…</div>
+    <div class="langRow"><span class="langLbl" data-i18n="lang.label">Language</span>
+      <div class="seg langSel">
+        <button data-lang="en">EN</button><button data-lang="ru">RU</button><button data-lang="bg">BG</button>
+      </div>
+    </div>
   </div>
 </div>
 

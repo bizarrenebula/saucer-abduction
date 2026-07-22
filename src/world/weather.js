@@ -26,7 +26,7 @@ export const WEATHER={
   vacuum  :{name:'weather.vacuum',      mult:1.1,  vis:false,fog:0.002},
   meteors :{name:'weather.meteors', mult:0.85, vis:true, color:0xcfd8e0,size:1.0,fall:26,slant:20,fog:0.0028,tex:'dot'},
   calm    :{name:'weather.calm',   mult:1.0,  vis:false,fog:0.0055},
-  duststorm:{name:'weather.duststorm',  mult:0.6,  vis:true, color:0xc46a3a,size:1.8,fall:10,slant:70,fog:0.011,tex:'grain'}
+  duststorm:{name:'weather.duststorm',  mult:0.6,  vis:true, color:0xb85a28,size:2.1,fall:12,slant:78,fog:0.013,tex:'grain'}
 };
 
 /* shared runtime weather state */
@@ -62,8 +62,11 @@ export function updateDust(){
 
 export function pickWeather(biome){
   weather.timer=8+Math.random()*10;
-  if(World.name==='moon')return Math.random()<0.3?'meteors':'vacuum';
-  if(World.name==='mars')return Math.random()<0.45?'duststorm':'calm';
+  // Moon: airless. No precipitation at all — the old 'meteors' dust read as
+  // snowfall, and the real meteor hazard now covers that ground.
+  if(World.name==='moon')return 'vacuum';
+  // Mars: the red sand storm is the signature weather, with occasional lulls.
+  if(World.name==='mars')return Math.random()<0.7?'duststorm':'calm';
   if(biome==='desert') return Math.random()<0.35?'sandstorm':'sunny';
   if(biome==='mountain') return Math.random()<0.5?'snowstorm':'snow';
   if(biome==='water') return 'fog';

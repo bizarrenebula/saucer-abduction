@@ -14,6 +14,7 @@ import { keys, input } from './core/input.js';
 
 import { reseed } from './world/noise.js';
 import { sample, heightAt } from './world/terrain.js';
+import { roadHeightAt } from './world/roads.js';
 import { World, dayNightUpdate, applyDayNightLight } from './world/world-config.js';
 import { updateChunks, chunks } from './world/chunks.js';
 import { WEATHER, weather, updateDust, pickWeather, applyWeather, updateWeatherParticles, setBeamMultHUD } from './world/weather.js';
@@ -21,6 +22,7 @@ import { WEATHER, weather, updateDust, pickWeather, applyWeather, updateWeatherP
 import { updateAnimals } from './entities/animals.js';
 import { updateCrystals } from './entities/crystals.js';
 import { updateProps } from './entities/props.js';
+import { updateVehicles } from './entities/vehicles.js';
 
 import { saucer, beamLight, shipLight, ebarBG, ebarFill3, updateEnergyBar } from './systems/saucer.js';
 import { beam, beamMat, disc, discMat, effBeamR } from './systems/beam.js';
@@ -131,7 +133,11 @@ function animate(){
     else altHudT=Math.max(0,altHudT-dt);
     // The absolute floor scales with the commanded hover, otherwise it would
     // pin the ship at 26 and descending would do nothing over low ground.
-    const gh=heightAt(saucer.position.x,saucer.position.z);
+    // The surface the ship flies over is the terrain OR the road deck above it,
+    // whichever is higher — otherwise it sails straight through embankments
+    // and bridges, which sit well above the ground they span.
+    const gh=Math.max(heightAt(saucer.position.x,saucer.position.z),
+                      roadHeightAt(saucer.position.x,saucer.position.z));
     const floorY=26*(S.hover/HOVER_BASE);
     const targetY=Math.max(floorY,gh+S.hover)+Math.sin(t*1.4)*0.5;
     saucer.position.y=lerp(saucer.position.y,targetY,Math.min(1,dt*3));
@@ -201,7 +207,8 @@ function animate(){
     updateMeteors(dt);
     updateGeysers(dt);
     updateLightning(dt);
-    updateCollision();          // trees / barns are solid — may flip state to 'crashing'
+    updateVehicles(dt,beamOn&&bp>0.5);
+    updateCollision();          // trees / barns / stations are solid — may flip state to 'crashing'
     Story.update(dt,beamOn&&bp>0.5);
 
     /* ---- energy ---- */
@@ -269,7 +276,8 @@ function animate(){
     updateProps(dt,false);updateCrystals(dt,false);updateAnimals(dt);
     camera.position.lerp(_v.set(saucer.position.x+camOffset.x,saucer.position.y+camOffset.y,saucer.position.z+camOffset.z),Math.min(1,dt*2.4));
     camera.lookAt(saucer.position.x+camLook.x,saucer.position.y+camLook.y,saucer.position.z+camLook.z);
-    const gh=heightAt(saucer.position.x,saucer.position.z);
+    const gh=Math.max(heightAt(saucer.position.x,saucer.position.z),
+                      roadHeightAt(saucer.position.x,saucer.position.z));
     if(saucer.position.y<=gh+2.5){
       saucer.position.y=gh+2.5;
       endGame(S.crashReason||'crash');
