@@ -5,12 +5,12 @@
    ========================================================================= */
 import { THREE } from '../core/three.js';
 import { env } from '../core/env.js';
-import { CHUNK, SEG, WATER_Y, GROUND_TILING, VEH_PER_CHUNK, STATION_CHANCE } from '../core/constants.js';
+import { CHUNK, SEG, WATER_Y, GROUND_TILING, VEH_PER_CHUNK, STATION_CHANCE, PROP_ROAD_GAP } from '../core/constants.js';
 import { scene } from '../core/engine.js';
 import { World } from './world-config.js';
 import { sample } from './terrain.js';
 import { TEX, grassTex, sandTex, rockTex, snowTex } from './textures.js';
-import { ROAD_HW, STEP, roadsNear, roadSample, buildRoadMesh, clearRoadCache, roadTex } from './roads.js';
+import { ROAD_HW, STEP, roadsNear, roadSample, buildRoadMesh, clearRoadCache, roadTex, roadDist } from './roads.js';
 import { animals, pickups, props, buildings, vehicles, shelters } from '../entities/registry.js';
 import { buildAnimal } from '../entities/animals.js';
 import { buildAlien } from '../entities/aliens.js';
@@ -115,20 +115,39 @@ export function buildChunk(cx,cz){
     if(Math.random()>0.55)continue;
     const wx=ox+Math.random()*CHUNK, wz=oz+Math.random()*CHUNK;
     const sm=sample(wx,wz);
-    if(World.name==='earth'&&sm.biome==='water')continue;
+    if(World.name==='earth'){
+      if(sm.biome==='water')continue;
+      // The shore band is still biome 'plains' but renders as wet sand, which
+      // is where trees were sprouting out of the beach. Keep scenery above it.
+      if(sm.h<WATER_Y+1.6)continue;
+      // Nothing on the tarmac or its verges.
+      if(roadDist(wx,wz)<ROAD_HW+PROP_ROAD_GAP)continue;
+    }
     const prop=buildProp(sm.biome);
     prop.position.set(wx,sm.h,wz);prop.userData.baseY=sm.h;
     prop.rotation.y=Math.random()*6.28;
     scene.add(prop);props.push(prop);pr.push(prop);
   }
+  /* Buildings are placed after scenery, so anything they land on is removed —
+     otherwise a gas station or barn swallows a tree. */
+  const clearPropsNear=(x,z,r)=>{
+    for(let i=pr.length-1;i>=0;i--){
+      const o=pr[i];
+      if(Math.hypot(o.position.x-x,o.position.z-z)>r)continue;
+      scene.remove(o);
+      const gi=props.indexOf(o); if(gi>=0)props.splice(gi,1);
+      pr.splice(i,1);
+    }
+  };
   const bl=[],sh=[];
   if(World.name==='earth'&&Math.random()<0.32){
     const wx=ox+8+Math.random()*(CHUNK-16), wz=oz+8+Math.random()*(CHUNK-16);
     const sm=sample(wx,wz);
-    if(sm.biome!=='water'&&sm.h<20){
+    if(sm.biome!=='water'&&sm.h<20&&sm.h>=WATER_Y+1.6&&roadDist(wx,wz)>ROAD_HW+9){
       const kind=sm.biome==='plains'?'barn':'camp';
       const b=buildBuilding(kind);
       b.position.set(wx,sm.h,wz);b.rotation.y=Math.random()*6.28;
+      clearPropsNear(wx,wz,9);
       scene.add(b);bl.push(b);buildings.push(b);
       const shel={x:wx,z:wz};shelters.push(shel);sh.push(shel);
       const nh=1+((Math.random()*2)|0);
@@ -177,6 +196,7 @@ export function buildChunk(cx,cz){
         const sm2=sample(sx,sz);
         if(sm2.biome!=='water'&&sm2.biome!=='mountain'&&sm2.h>WATER_Y+1){
           const st=buildStation();
+          clearPropsNear(sx,sz,13);
           st.position.set(sx,sm2.h,sz);
           st.rotation.y=Math.atan2(-sp.fz*side,sp.fx*side);   // forecourt toward the road
           scene.add(st);bl.push(st);buildings.push(st);

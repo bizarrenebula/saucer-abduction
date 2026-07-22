@@ -261,19 +261,26 @@ export function roadSample(axis,k,t){
    axis: only the handful of corridors whose k could reach this point need
    testing, and each is a single sample. Used so the ship rides over roads and
    bridges instead of through them. */
-export function roadHeightAt(x,z){
-  let best=-Infinity;
+function nearestRoad(x,z){
+  let bd=Infinity, by=-Infinity;
   for(const axis of ['x','z']){
     const c=(axis==='x')?z:x, t=(axis==='x')?x:z;
     const k0=Math.ceil((c-MAXDEV-ROAD_HW)/ROAD_S)*ROAD_S;
     for(let k=k0;k<=c+MAXDEV+ROAD_HW;k+=ROAD_S){
       const sp=roadSample(axis,k,t);
-      const dx=sp.x-x, dz=sp.z-z;
-      if(dx*dx+dz*dz<(ROAD_HW+1.2)*(ROAD_HW+1.2))best=Math.max(best,sp.y);
+      const d=Math.hypot(sp.x-x,sp.z-z);
+      if(d<bd){bd=d;by=sp.y;}
     }
   }
-  return best;
+  return {d:bd,y:by};
 }
+export function roadHeightAt(x,z){
+  const n=nearestRoad(x,z);
+  return n.d<ROAD_HW+1.2 ? n.y : -Infinity;
+}
+/* Horizontal distance to the nearest carriageway centre line, or Infinity.
+   Used to keep scenery off the tarmac and its verges. */
+export function roadDist(x,z){ return nearestRoad(x,z).d; }
 
 /* ---------- which corridors touch a chunk ---------- */
 export function roadsNear(ox,oz,size){
