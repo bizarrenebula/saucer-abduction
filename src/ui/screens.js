@@ -164,10 +164,28 @@ document.getElementById('quitBtn').addEventListener('click',toMenu);
 addEventListener('keydown',e=>{ if(e.key==='Escape'){
   if(S.state==='playing')pauseGame(); else if(S.state==='paused')resumeGame(); }});
 
-/* ---------- music volume (tracks are per-world now) ---------- */
+/* ---------- music volume ---------- */
 const sMusicVol=document.getElementById('sMusicVol');
 Music.vol=+sMusicVol.value/100;
 sMusicVol.addEventListener('input',()=>Music.setVolume(+sMusicVol.value/100));
+
+/* ---------- music source: bundled orchestral Soundtrack vs procedural synth ---------- */
+const segMusic=document.getElementById('segMusic');
+const oMusicSrc=document.getElementById('oMusicSrc');
+export function applyMusicSrc(mode){
+  S.musicMode=(mode==='procedural')?'procedural':'soundtrack';
+  Music.setMode(S.musicMode);
+  if(segMusic)segMusic.querySelectorAll('[data-ms]').forEach(x=>x.classList.toggle('on',x.dataset.ms===S.musicMode));
+  if(oMusicSrc)oMusicSrc.textContent=t(S.musicMode==='procedural'?'music.procedural':'music.soundtrack');
+  try{localStorage.setItem('abductor.music',S.musicMode);}catch(e){}
+}
+if(segMusic)segMusic.addEventListener('click',e=>{const b=e.target.closest('[data-ms]');if(b)applyMusicSrc(b.dataset.ms);});
+let _ms0=null; try{_ms0=localStorage.getItem('abductor.music');}catch(e){}
+if(_ms0!=='soundtrack'&&_ms0!=='procedural')_ms0='soundtrack';
+// set the source before any track starts (Music.setMode no-ops until a track plays)
+Music.mode=_ms0; S.musicMode=_ms0;
+if(segMusic)segMusic.querySelectorAll('[data-ms]').forEach(x=>x.classList.toggle('on',x.dataset.ms===_ms0));
+if(oMusicSrc)oMusicSrc.textContent=t(_ms0==='procedural'?'music.procedural':'music.soundtrack');
 
 /* ---------- world + reactor + mode selection ---------- */
 document.getElementById('segWorld').addEventListener('click',e=>{
@@ -278,6 +296,7 @@ onLang(()=>{
   document.getElementById('oMode').textContent=t(S.storyMode?'mode.story':'mode.explore');
   document.getElementById('oEnergy').textContent=t(S.energyMode==='drain'?'reactor.drain':'reactor.inf');
   if(oGraphics)oGraphics.textContent=t(S.gfx==='full'?'gfx.cinematic':'gfx.basic');
+  if(oMusicSrc)oMusicSrc.textContent=t(S.musicMode==='procedural'?'music.procedural':'music.soundtrack');
   if(specV)specV.textContent=t('hud.taken',{n:S.taken});
   Story._last=''; if(Story.active)Story.hud();
 });

@@ -63,6 +63,9 @@ export const Theremin={
 export const Music={
   ac:null,master:null,musicBus:null,sfx:null,conv:null,revWet:null,delay:null,delayFb:null,echoIn:null,
   track:'off',playing:false,vol:0.6,timer:null,step:0,nextT:0,spb:0.25,drone:[],
+  // music source: 'soundtrack' = the bundled orchestral MP3 (looped); 'procedural'
+  // = the per-world synth tracks. The theremin layers over either. See setMode().
+  mode:'soundtrack',fileEl:null,fileGain:null,fileFailed:false,
   ensure(){
     if(this.ac)return;
     const AC=window.AudioContext||window.webkitAudioContext;const ac=new AC();this.ac=ac;
@@ -160,16 +163,63 @@ export const Music={
     clearInterval(this.timer);this.timer=setInterval(()=>this.schedule(),25);
   },
   stopAll(){clearInterval(this.timer);this.timer=null;this.stopDrone();Theremin.stop();this.playing=false;},
-  setVolume(v){this.vol=v;if(this.musicBus)this.musicBus.gain.setTargetAtTime(Math.max(0.0001,v),this.ac.currentTime,0.1);},
+  setVolume(v){this.vol=v;const t=this.ac?this.ac.currentTime:0;
+    if(this.musicBus)this.musicBus.gain.setTargetAtTime(Math.max(0.0001,v),t,0.1);
+    if(this.fileGain)this.fileGain.gain.setTargetAtTime(Math.max(0.0001,v),t,0.1);},
+
+  /* ---- bundled orchestral soundtrack (audio/soundtrack.mp3), looped, routed
+     through its own gain so the Music volume slider still governs it. If the
+     file can't load, we fall back to the procedural engine so there's always
+     music. ---- */
+  initFile(){
+    if(this.fileEl||this.fileFailed)return;
+    try{
+      const a=new Audio();a.src='audio/soundtrack.mp3';a.loop=true;a.preload='auto';
+      const src=this.ac.createMediaElementSource(a);
+      const g=this.ac.createGain();g.gain.value=this.vol;
+      src.connect(g);g.connect(this.master);
+      a.addEventListener('error',()=>{ this.fileFailed=true; if(this.mode==='soundtrack'){this.mode='procedural';if(this.track&&this.track!=='off')this.set(this.track);} });
+      this.fileEl=a;this.fileGain=g;
+    }catch(e){ this.fileFailed=true; }
+  },
+  playFile(){ this.initFile(); if(this.fileEl){try{const p=this.fileEl.play();if(p)p.catch(()=>{});}catch(e){}} },
+  stopFile(){ if(this.fileEl){try{this.fileEl.pause();}catch(e){}} },
+
+  /* Switch music source live (Settings). Restarts whatever's currently playing
+     under the new source. */
+  setMode(mode){
+    if(mode!=='soundtrack'&&mode!=='procedural')return;
+    if(this.mode===mode)return;
+    this.mode=mode;
+    const cur=this.track;
+    this.stopFile();this.stopAll();
+    if(cur&&cur!=='off')this.set(cur);
+  },
+
   set(name){
     this.ensure();if(this.ac.state==='suspended')this.ac.resume();
-    if(name==='off'){if(this.playing){this.musicBus.gain.setTargetAtTime(0.0001,this.ac.currentTime,0.2);setTimeout(()=>this.stopAll(),450);}this.track='off';return;}
-    if(this.track===name&&this.playing)return;
+    if(name==='off'){
+      this.track='off';this.stopFile();Theremin.stop();
+      if(this.playing){this.musicBus.gain.setTargetAtTime(0.0001,this.ac.currentTime,0.2);setTimeout(()=>this.stopAll(),450);}
+      return;
+    }
+    // theremin + procedural both route through musicBus — keep it audible
+    this.musicBus.gain.setTargetAtTime(this.vol,this.ac.currentTime,0.3);
+    if(this.mode==='soundtrack'&&!this.fileFailed){
+      if(this.timer)this.stopAll();          // ensure the step sequencer is off
+      this.track=name;this.playing=true;
+      this.playFile();Theremin.start();
+      return;
+    }
+    // --- procedural per-world tracks ---
+    this.stopFile();
+    if(this.track===name&&this.playing&&this.timer)return;
     const swap=()=>{this.stopAll();this.startTrack(name);
       this.musicBus.gain.cancelScheduledValues(this.ac.currentTime);
       this.musicBus.gain.setTargetAtTime(this.vol,this.ac.currentTime,0.4);};
     if(this.playing){this.musicBus.gain.setTargetAtTime(0.0001,this.ac.currentTime,0.12);setTimeout(swap,320);}
     else swap();
+    this.track=name;
   }
 };
 
