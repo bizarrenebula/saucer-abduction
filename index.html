@@ -117,6 +117,10 @@
   .sp-lang button:hover{color:var(--ink)}
   .sp-lang button.on{background:linear-gradient(180deg,#7dffc0,var(--beam));color:#04160f;
     box-shadow:0 0 16px rgba(89,255,176,.4);border-color:transparent;font-weight:700}
+  .sp-hint{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-soft);
+    margin-top:2px;animation:hintPulse 1.8s ease-in-out infinite}
+  @keyframes hintPulse{0%,100%{opacity:.5}50%{opacity:1}}
+  #splash.picked .sp-hint{animation:none;opacity:0;transition:opacity .3s}
   .slogan{text-align:center;font-style:italic;letter-spacing:.05em;color:var(--ink-soft);
     font-size:13px;margin:2px 0 16px}
 
@@ -384,6 +388,7 @@
   <div class="sp-lang" id="splashLang">
     <button data-lang="en">EN</button><button data-lang="ru">RU</button><button data-lang="bg">BG</button>
   </div>
+  <div class="sp-hint" id="splashHint" data-i18n="splash.pick">select a language to begin</div>
 </div>
 
 <!-- LANDING SCREEN -->

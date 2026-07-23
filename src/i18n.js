@@ -56,6 +56,7 @@ const STRINGS = {
     'btn.play':'play',
     'loadNote.loading':'loading assets…',
     'loadNote.ready':'ready',
+    'splash.pick':'select a language to begin',
     // --- units ---
     'unit.s':'{n} s',
     'unit.instant':'Instant',
@@ -218,6 +219,7 @@ const STRINGS = {
     'btn.play':'играть',
     'loadNote.loading':'загрузка ресурсов…',
     'loadNote.ready':'готово',
+    'splash.pick':'выберите язык, чтобы начать',
     'unit.s':'{n} с',
     'unit.instant':'Мгновенно',
     'unit.m':'{n} м',
@@ -363,6 +365,7 @@ const STRINGS = {
     'btn.play':'играй',
     'loadNote.loading':'зареждане на ресурси…',
     'loadNote.ready':'готово',
+    'splash.pick':'изберете език, за да започнете',
     'unit.s':'{n} с',
     'unit.instant':'Мигновено',
     'unit.m':'{n} м',

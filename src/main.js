@@ -371,19 +371,32 @@ function animate(){
    BOOT
    ========================================================================= */
 const SPLASH_T0=performance.now();
-let assetsReady=false;
+let assetsReady=false, langChosen=false, splashGone=false;
 function enablePlay(){
   if(assetsReady)return;assetsReady=true;
   const b=document.getElementById('startBtn');if(b)b.disabled=false;
   const n=document.getElementById('loadNote');if(n)n.textContent=tr('loadNote.ready');
   diagFinish();   // settle the splash line even if some assets fell back
+  maybeDismissSplash();
+}
+// The splash only leaves once the player has picked a language AND assets are
+// ready — language selection is mandatory before the settings screen.
+function maybeDismissSplash(){
+  if(splashGone||!assetsReady||!langChosen)return;
+  splashGone=true;
   const sp=document.getElementById('splash');
   if(sp){
-    // hold the splash at least ~1.8s total so fast loads don't blink past it
-    const wait=Math.max(700,1800-(performance.now()-SPLASH_T0));
+    const wait=Math.max(300,1200-(performance.now()-SPLASH_T0));   // brief hold so it doesn't blink past
     setTimeout(()=>{sp.classList.add('done');setTimeout(()=>sp.remove(),900);},wait);
   }
 }
+// Picking a language on the splash is what lets the boot proceed.
+document.querySelectorAll('#splashLang [data-lang]').forEach(b=>
+  b.addEventListener('click',()=>{
+    langChosen=true;
+    const sp=document.getElementById('splash');if(sp)sp.classList.add('picked');
+    maybeDismissSplash();
+  }));
 setTimeout(enablePlay,20000);   // never trap the player on a dead network
 
 (env.LOW_END?Promise.resolve():loadAllAssets()).then(()=>{
