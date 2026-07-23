@@ -43,8 +43,9 @@ addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
 const joyEl={L:null,R:null};
 function joy(h){ if(joyEl[h]===null)joyEl[h]=document.getElementById(h==='L'?'joyL':'joyR'); return joyEl[h]; }
 function showJoy(h,ox,oy){ const el=joy(h); if(!el)return; el.style.left=ox+'px';el.style.top=oy+'px';el.classList.add('on'); moveKnob(h,0,0); }
-function moveKnob(h,dx,dy){ const el=joy(h); if(!el)return; const k=el.firstElementChild&&el.querySelector('.joy-knob'); if(k)k.style.transform='translate('+dx+'px,'+dy+'px)'; }
+function moveKnob(h,dx,dy){ const el=joy(h); if(!el)return; const k=el.querySelector('.joy-knob'); if(k)k.style.transform='translate('+dx+'px,'+dy+'px)'; }
 function hideJoy(h){ const el=joy(h); if(el)el.classList.remove('on'); }
+function setBeaming(on){ const el=joy('R'); if(el)el.classList.toggle('beaming',on); }   // hides the "double-tap" hint while beaming
 
 function setAxes(h,vx,vy){
   if(h==='L'){input.tStrafe=vx;input.tClimb=-vy;}   // up on screen = climb
@@ -52,10 +53,15 @@ function setAxes(h,vx,vy){
 }
 function clearAxes(h){ if(h==='L'){input.tStrafe=0;input.tClimb=0;} else {input.tFwd=0;input.tTurn=0;} }
 
-// per-half state; `ids` holds the active pointer ids that started in that half
-const half={L:{ids:[],ox:0,oy:0,pinchD:0},R:{ids:[],ox:0,oy:0,pinchD:0}};
+// per-half state; `ids` holds the active pointer ids that started in that half.
+// The right half also tracks a double-tap so it can open the beam (see below).
+const half={
+  L:{ids:[],ox:0,oy:0,pinchD:0,downT:0,moved:0},
+  R:{ids:[],ox:0,oy:0,pinchD:0,downT:0,moved:0,beamPtr:null,lastWasTap:false,lastTapT:0,lastTapX:0,lastTapY:0},
+};
 const ptrHalf=new Map();   // pointerId -> 'L' | 'R'
 const pos=new Map();       // pointerId -> {x,y}
+const TAP_MS=260, TAP_MOVE=18, DTAP_MS=320, DTAP_DIST=48;   // tap / double-tap thresholds
 
 function pinchDist(H){
   if(H.ids.length<2)return 0;
@@ -65,11 +71,20 @@ function pinchDist(H){
 
 renderer.domElement.addEventListener('pointerdown',e=>{
   if(S.state!=='playing'||e.pointerType==='mouse')return;   // desktop flies by keyboard
-  const h=e.clientX<innerWidth/2?'L':'R', H=half[h];
+  const h=e.clientX<innerWidth/2?'L':'R', H=half[h], now=performance.now();
   pos.set(e.pointerId,{x:e.clientX,y:e.clientY});
   ptrHalf.set(e.pointerId,h);
   H.ids.push(e.pointerId);
-  if(H.ids.length===1){ H.ox=e.clientX;H.oy=e.clientY; showJoy(h,e.clientX,e.clientY); }
+  if(H.ids.length===1){
+    H.ox=e.clientX;H.oy=e.clientY;H.downT=now;H.moved=0;
+    showJoy(h,e.clientX,e.clientY);
+    // Right stick: a double-tap (this press soon after a quick tap nearby) opens
+    // the beam. It stays on while this finger is held, and the stick still steers,
+    // so you can beam and manoeuvre with the same thumb. Releasing stops the beam.
+    if(h==='R'&&H.lastWasTap&&now-H.lastTapT<DTAP_MS&&Math.hypot(e.clientX-H.lastTapX,e.clientY-H.lastTapY)<DTAP_DIST){
+      H.beamPtr=e.pointerId;input.beamHold=true;setBeaming(true);H.lastWasTap=false;
+    }
+  }
   else if(H.ids.length===2){ clearAxes(h); hideJoy(h); H.pinchD=pinchDist(H); }   // enter pinch
 });
 
@@ -85,6 +100,7 @@ addEventListener('pointermove',e=>{
   }
   if(e.pointerId!==H.ids[0])return;                      // only the anchor finger drives the stick
   const dx=e.clientX-H.ox, dy=e.clientY-H.oy;
+  H.moved=Math.max(H.moved,Math.hypot(dx,dy));           // track travel to tell a tap from a drag
   const len=Math.hypot(dx,dy)||1, cl=Math.min(len,R);
   const kx=dx/len*cl, ky=dy/len*cl;
   moveKnob(h,kx,ky);
@@ -93,9 +109,15 @@ addEventListener('pointermove',e=>{
 
 function endPtr(e){
   if(!ptrHalf.has(e.pointerId))return;
-  const h=ptrHalf.get(e.pointerId), H=half[h];
+  const h=ptrHalf.get(e.pointerId), H=half[h], now=performance.now();
+  const wasAnchor=(H.ids[0]===e.pointerId);
   ptrHalf.delete(e.pointerId); pos.delete(e.pointerId);
   const i=H.ids.indexOf(e.pointerId); if(i>=0)H.ids.splice(i,1);
+  if(h==='R'&&e.pointerId===H.beamPtr){ input.beamHold=false;H.beamPtr=null;setBeaming(false); }
+  if(h==='R'&&wasAnchor){                                 // remember whether this press was a quick tap
+    H.lastWasTap=(now-H.downT<TAP_MS&&H.moved<TAP_MOVE);
+    H.lastTapT=now;H.lastTapX=H.ox;H.lastTapY=H.oy;
+  }
   if(H.ids.length===0){ clearAxes(h); hideJoy(h); }
   else if(H.ids.length===1){                             // pinch broke back to a single stick
     const p=pos.get(H.ids[0]); if(p){ H.ox=p.x;H.oy=p.y; showJoy(h,p.x,p.y); }
@@ -113,13 +135,13 @@ function bindBtn(id,on,off){
     ['pointerup','pointercancel','pointerleave'].forEach(ev=>el.addEventListener(ev,e=>{off();}));
   }
 }
-bindBtn('beamBtn',()=>{ if(S.state==='playing')input.beamHold=true; },()=>{ input.beamHold=false; });
 bindBtn('cloakBtn',()=>{ if(S.state==='playing')toggleCloak(); },null);
 
 /* Reset all touch intents (called by startGame / respawn). */
 export function resetInputTouch(){
   input.tFwd=input.tStrafe=input.tTurn=input.tClimb=0;
   input.beamHold=false;input.zoom=1;
-  half.L.ids.length=0;half.R.ids.length=0;ptrHalf.clear();pos.clear();
-  hideJoy('L');hideJoy('R');
+  half.L.ids.length=0;half.R.ids.length=0;half.R.beamPtr=null;half.R.lastWasTap=false;
+  ptrHalf.clear();pos.clear();
+  hideJoy('L');hideJoy('R');setBeaming(false);
 }
