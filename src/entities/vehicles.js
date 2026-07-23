@@ -177,8 +177,9 @@ export function updateVehicles(dt,beamActive){
     if(u.stun>0){u.stun-=dt;u.speed=0;continue;}
 
     // Halt when the saucer is overhead — horizontal distance only, so it
-    // triggers on a fly-over regardless of altitude.
-    const overhead=d2<VEH_STOP_R*VEH_STOP_R;
+    // triggers on a fly-over regardless of altitude. A cloaked ship is invisible,
+    // so traffic keeps cruising until it decloaks (which the beam forces).
+    const overhead=!S.cloak&&d2<VEH_STOP_R*VEH_STOP_R;
     u.halted=overhead;
     const want=overhead?0:u.cruise;
     u.speed=lerp(u.speed,want,Math.min(1,dt*(overhead?3.2:0.9)));

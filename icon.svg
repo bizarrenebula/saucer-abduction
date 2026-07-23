@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#0a1512"/>
+      <stop offset="70%" stop-color="#010203"/>
+    </radialGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8fe8b8" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#8fe8b8" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="hull" cx="40%" cy="34%" r="75%">
+      <stop offset="0%" stop-color="#c6d4e0"/>
+      <stop offset="55%" stop-color="#5a6874"/>
+      <stop offset="100%" stop-color="#2b333c"/>
+    </radialGradient>
+    <radialGradient id="dome" cx="42%" cy="35%" r="70%">
+      <stop offset="0%" stop-color="#bff5dd"/>
+      <stop offset="75%" stop-color="#3f8f6c"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- abduction beam -->
+  <path d="M256 232 L372 452 L140 452 Z" fill="url(#beam)"/>
+  <ellipse cx="256" cy="452" rx="116" ry="22" fill="#8fe8b8" opacity="0.28"/>
+  <!-- saucer -->
+  <ellipse cx="256" cy="222" rx="150" ry="52" fill="url(#hull)" stroke="#39424c" stroke-width="6"/>
+  <ellipse cx="256" cy="188" rx="66" ry="46" fill="url(#dome)"/>
+  <!-- rim lights -->
+  <g fill="#59ffb0">
+    <circle cx="140" cy="232" r="9"/><circle cx="196" cy="248" r="9"/>
+    <circle cx="256" cy="252" r="9"/><circle cx="316" cy="248" r="9"/>
+    <circle cx="372" cy="232" r="9"/>
+  </g>
+</svg>

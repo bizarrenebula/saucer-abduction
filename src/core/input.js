@@ -1,95 +1,125 @@
 /* =========================================================================
-   INPUT — keyboard + pointer. Mutable pointer flags live on the shared `input`
-   object so the main loop, the special, and the PULL button can all read/write
-   them across modules.
+   INPUT — keyboard + two on-screen joysticks (touch), self-contained (no lib).
 
-   Pointer gestures on the ship itself are separate from the drag-to-fly
-   gesture used everywhere else on the canvas:
-     · press and hold 2s on the ship  -> toggle cloak
-     · swipe up / down on the ship    -> raise / lower hover altitude
-   Moving past SHIP_SLOP cancels the pending hold, so a swipe never also
-   cloaks; conversely holding still never nudges altitude.
+   DESKTOP
+     · ↑ / ↓   move forward / backward (relative to heading)
+     · ← / →   turn the ship left / right
+     · W / S   ascend / descend
+     · A / D   strafe left / right
+     · space   beam   ·   Q  pull   ·   C  cloak
+
+   TOUCH — two dynamic joysticks, one per screen half:
+     · LEFT  half  (WASD stick):  x = strafe,  y = ascend/descend
+     · RIGHT half  (arrow stick): y = forward/back,  x = turn
+     Two fingers in the SAME half = pinch-to-zoom the camera (that half's stick
+     is suspended for the pinch, so it never fights the twin-stick).
+     On-screen BEAM (hold), CLOAK (tap) and PULL buttons cover the actions.
+
+   The module only produces intents on `input.*`; the main loop integrates them
+   with momentum, so nothing here ever writes a position.
    ========================================================================= */
-import { THREE } from './three.js';
 import { clamp } from './math.js';
-import { camera, renderer } from './engine.js';
+import { renderer } from './engine.js';
 import { S } from './state.js';
-import { HOVER_MIN, HOVER_MAX, HOVER_SENS } from './constants.js';
-import { saucer } from '../systems/saucer.js';
 import { toggleCloak } from '../systems/cloak.js';
 
 export const keys={};
-export const input={dragActive:false,dragOX:0,dragOY:0,dragVX:0,dragVY:0,beamHold:false,lastTapT:-1e9,spHeld:false,
-  shipHold:false,       // finger is down on the ship
-  shipSwiping:false,    // that press has become an up/down altitude swipe
-  cloakProg:0};         // 0..1 progress of the hold-to-cloak timer, for the HUD ring
+export const input={
+  tFwd:0, tStrafe:0, tTurn:0, tClimb:0,   // touch joystick axes, each -1..1
+  beamHold:false, spHeld:false,
+  zoom:1,                                  // user camera-zoom multiplier (pinch)
+};
 
-export const CLOAK_HOLD_MS=2000;   // press-and-hold duration that toggles cloak
-export const CLOAK_KEY='c';        // desktop cloak toggle (q is taken by PULL)
-const SHIP_SLOP=10;                // px of travel that turns a hold into a swipe
+export const CLOAK_KEY='c';
+const R=68;                    // joystick radius (px) for full deflection
+const ZOOM_MIN=0.55, ZOOM_MAX=2.6;
 
 addEventListener('keydown',e=>{const k=e.key.toLowerCase();keys[k]=true;
-  // C toggles cloak — the keyboard equivalent of holding the ship for 2s.
-  // Not Q: that already fires the special PULL (see Special.update in main.js).
-  // e.repeat guards against key auto-repeat toggling it many times per second.
   if(k===CLOAK_KEY&&!e.repeat&&S.state==='playing')toggleCloak();
   if(k===' '||k.startsWith('arrow'))e.preventDefault();});
 addEventListener('keyup',e=>{keys[e.key.toLowerCase()]=false;});
 
-const _ray=new THREE.Raycaster();const _ndc=new THREE.Vector2();
-function tappedSaucer(e){
-  _ndc.set((e.clientX/innerWidth)*2-1, -(e.clientY/innerHeight)*2+1);
-  _ray.setFromCamera(_ndc,camera);
-  const hits=_ray.intersectObject(saucer,true);
-  return hits.length>0;
-}
-/* --- ship gestures: hold to cloak, swipe to change altitude --- */
-let shipStartY=0, shipStartHover=0, holdT0=0, holdTimer=0, cloakFired=false;
+/* ---- twin joysticks ---- */
+const joyEl={L:null,R:null};
+function joy(h){ if(joyEl[h]===null)joyEl[h]=document.getElementById(h==='L'?'joyL':'joyR'); return joyEl[h]; }
+function showJoy(h,ox,oy){ const el=joy(h); if(!el)return; el.style.left=ox+'px';el.style.top=oy+'px';el.classList.add('on'); moveKnob(h,0,0); }
+function moveKnob(h,dx,dy){ const el=joy(h); if(!el)return; const k=el.firstElementChild&&el.querySelector('.joy-knob'); if(k)k.style.transform='translate('+dx+'px,'+dy+'px)'; }
+function hideJoy(h){ const el=joy(h); if(el)el.classList.remove('on'); }
 
-function endShipGesture(){
-  if(holdTimer){clearTimeout(holdTimer);holdTimer=0;}
-  input.shipHold=false;input.shipSwiping=false;input.cloakProg=0;cloakFired=false;
+function setAxes(h,vx,vy){
+  if(h==='L'){input.tStrafe=vx;input.tClimb=-vy;}   // up on screen = climb
+  else{input.tFwd=-vy;input.tTurn=vx;}              // up on screen = forward
 }
-function cancelHold(){                 // swipe started: the cloak timer is off
-  if(holdTimer){clearTimeout(holdTimer);holdTimer=0;}
-  input.cloakProg=0;
+function clearAxes(h){ if(h==='L'){input.tStrafe=0;input.tClimb=0;} else {input.tFwd=0;input.tTurn=0;} }
+
+// per-half state; `ids` holds the active pointer ids that started in that half
+const half={L:{ids:[],ox:0,oy:0,pinchD:0},R:{ids:[],ox:0,oy:0,pinchD:0}};
+const ptrHalf=new Map();   // pointerId -> 'L' | 'R'
+const pos=new Map();       // pointerId -> {x,y}
+
+function pinchDist(H){
+  if(H.ids.length<2)return 0;
+  const a=pos.get(H.ids[0]), b=pos.get(H.ids[1]);
+  return (a&&b)?Math.hypot(a.x-b.x,a.y-b.y):0;
 }
 
 renderer.domElement.addEventListener('pointerdown',e=>{
-  if(S.state==='playing'&&tappedSaucer(e)){
-    input.shipHold=true;input.shipSwiping=false;cloakFired=false;
-    shipStartY=e.clientY;shipStartHover=S.hover;
-    holdT0=performance.now();
-    // Once the cloak fires, the gesture is spent: don't let the same still-held
-    // finger then start scrubbing altitude on its way back up.
-    holdTimer=setTimeout(()=>{holdTimer=0;input.cloakProg=0;cloakFired=true;toggleCloak();},CLOAK_HOLD_MS);
-    return;                            // never also starts a drag-to-fly
-  }
-  input.dragActive=true;input.dragOX=e.clientX;input.dragOY=e.clientY;input.dragVX=0;input.dragVY=0;
-  const now=performance.now();
-  if(now-input.lastTapT<320)input.beamHold=true;   // second tap of a double-tap: hold to beam
-  input.lastTapT=now;
+  if(S.state!=='playing'||e.pointerType==='mouse')return;   // desktop flies by keyboard
+  const h=e.clientX<innerWidth/2?'L':'R', H=half[h];
+  pos.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  ptrHalf.set(e.pointerId,h);
+  H.ids.push(e.pointerId);
+  if(H.ids.length===1){ H.ox=e.clientX;H.oy=e.clientY; showJoy(h,e.clientX,e.clientY); }
+  else if(H.ids.length===2){ clearAxes(h); hideJoy(h); H.pinchD=pinchDist(H); }   // enter pinch
 });
 
 addEventListener('pointermove',e=>{
-  if(input.shipHold){
-    if(cloakFired)return;                       // gesture already spent on the cloak
-    const dy=shipStartY-e.clientY;              // up on screen = positive = climb
-    if(!input.shipSwiping&&Math.abs(dy)>SHIP_SLOP){input.shipSwiping=true;cancelHold();}
-    if(input.shipSwiping){
-      // Set the commanded altitude directly from total swipe distance; the main
-      // loop lerps the ship toward it, which is what makes the climb gradual.
-      S.hover=clamp(shipStartHover+dy*HOVER_SENS,HOVER_MIN,HOVER_MAX);
-    }
+  if(!ptrHalf.has(e.pointerId))return;
+  const p=pos.get(e.pointerId); if(p){p.x=e.clientX;p.y=e.clientY;}
+  const h=ptrHalf.get(e.pointerId), H=half[h];
+  if(H.ids.length>=2){                                   // pinch-zoom in this half
+    const d=pinchDist(H);
+    if(H.pinchD>0&&d>0)input.zoom=clamp(input.zoom*(H.pinchD/d),ZOOM_MIN,ZOOM_MAX);
+    H.pinchD=d;
     return;
   }
-  if(input.dragActive){input.dragVX=clamp((e.clientX-input.dragOX)/70,-1,1);input.dragVY=clamp((e.clientY-input.dragOY)/70,-1,1);}
-});
+  if(e.pointerId!==H.ids[0])return;                      // only the anchor finger drives the stick
+  const dx=e.clientX-H.ox, dy=e.clientY-H.oy;
+  const len=Math.hypot(dx,dy)||1, cl=Math.min(len,R);
+  const kx=dx/len*cl, ky=dy/len*cl;
+  moveKnob(h,kx,ky);
+  setAxes(h,kx/R,ky/R);
+},{passive:true});
 
-addEventListener('pointerup',()=>{endShipGesture();input.dragActive=false;input.dragVX=0;input.dragVY=0;input.beamHold=false;input.spHeld=false;});
-addEventListener('pointercancel',()=>{endShipGesture();input.dragActive=false;input.dragVX=0;input.dragVY=0;input.beamHold=false;input.spHeld=false;});
+function endPtr(e){
+  if(!ptrHalf.has(e.pointerId))return;
+  const h=ptrHalf.get(e.pointerId), H=half[h];
+  ptrHalf.delete(e.pointerId); pos.delete(e.pointerId);
+  const i=H.ids.indexOf(e.pointerId); if(i>=0)H.ids.splice(i,1);
+  if(H.ids.length===0){ clearAxes(h); hideJoy(h); }
+  else if(H.ids.length===1){                             // pinch broke back to a single stick
+    const p=pos.get(H.ids[0]); if(p){ H.ox=p.x;H.oy=p.y; showJoy(h,p.x,p.y); }
+  }
+}
+addEventListener('pointerup',endPtr);
+addEventListener('pointercancel',endPtr);
 
-/* Drive the hold-to-cloak progress value the HUD reads. Cheap enough to poll. */
-setInterval(()=>{
-  input.cloakProg=(input.shipHold&&holdTimer)?Math.min(1,(performance.now()-holdT0)/CLOAK_HOLD_MS):0;
-},33);
+/* ---- on-screen action buttons (touch) ---- */
+function bindBtn(id,on,off){
+  const el=document.getElementById(id); if(!el)return;
+  el.addEventListener('pointerdown',e=>{e.preventDefault();on();});
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+  if(off){
+    ['pointerup','pointercancel','pointerleave'].forEach(ev=>el.addEventListener(ev,e=>{off();}));
+  }
+}
+bindBtn('beamBtn',()=>{ if(S.state==='playing')input.beamHold=true; },()=>{ input.beamHold=false; });
+bindBtn('cloakBtn',()=>{ if(S.state==='playing')toggleCloak(); },null);
+
+/* Reset all touch intents (called by startGame / respawn). */
+export function resetInputTouch(){
+  input.tFwd=input.tStrafe=input.tTurn=input.tClimb=0;
+  input.beamHold=false;input.zoom=1;
+  half.L.ids.length=0;half.R.ids.length=0;ptrHalf.clear();pos.clear();
+  hideJoy('L');hideJoy('R');
+}

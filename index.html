@@ -4,6 +4,17 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 <title>ABDUCTOR // field survey unit</title>
+<!-- Installable web app: "Add to Home Screen" runs it fullscreen with no browser
+     chrome, which the touch flight controls need. Works on Android (manifest) and
+     iOS (apple-mobile-web-app meta + apple-touch-icon). -->
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#010203" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="ABDUCTOR" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
 <style>
   :root{
     --bg:#010203;
@@ -47,16 +58,23 @@
   #cloakRing .cap{position:absolute;inset:0;display:flex;align-items:center;
     justify-content:center;font-size:8px;letter-spacing:.2em;color:var(--beam)}
 
+  /* altitude bar — on touch it appears (via JS) on whichever half of the screen
+     the vertical swipe happened, hence the dynamic left/right positioning. */
   #altScale{position:absolute;right:20px;top:50%;transform:translateY(-50%);
-    width:34px;height:150px;opacity:0;transition:opacity .18s ease;pointer-events:none}
+    width:34px;height:164px;opacity:0;transition:opacity .18s ease;pointer-events:none;
+    border-radius:17px;background:rgba(5,12,10,.28);backdrop-filter:blur(3px)}
   #altScale.on{opacity:1}
-  #altTrack{position:absolute;left:14px;top:0;bottom:0;width:3px;border-radius:2px;
+  #altScale.left{left:20px;right:auto}
+  #altTrack{position:absolute;left:15px;top:10px;bottom:10px;width:3px;border-radius:2px;
     background:rgba(143,232,184,.15)}
-  #altKnob{position:absolute;left:8px;width:15px;height:3px;border-radius:2px;
+  #altKnob{position:absolute;left:9px;top:50%;width:15px;height:3px;border-radius:2px;
     background:var(--beam);box-shadow:0 0 8px rgba(143,232,184,.7);
-    transform:translateY(-50%)}
+    transform:translateY(-50%);transition:box-shadow .15s,background .15s}
+  #altScale.climb #altKnob{box-shadow:0 0 14px rgba(143,232,184,1)}
+  #altScale.dive #altKnob{background:#ffb090;box-shadow:0 0 14px rgba(255,150,120,.9)}
   #altVal{position:absolute;right:36px;top:50%;transform:translateY(-50%);
     font-size:10px;letter-spacing:.1em;color:var(--beam);white-space:nowrap}
+  #altScale.left #altVal{left:36px;right:auto}
 
   /* film veil: vignette + grain over the scene, under the HUD */
   #veil{position:fixed;inset:0;pointer-events:none;z-index:5;
@@ -92,8 +110,30 @@
     line-height:1.8;text-align:center;text-transform:uppercase}
   #splashLog b{color:var(--beam);font-weight:700}
 
+  /* ---------- touch joysticks + action buttons ---------- */
+  .joy{position:fixed;z-index:14;pointer-events:none;width:0;height:0;opacity:0;transition:opacity .12s}
+  .joy.on{opacity:1}
+  .joy-base{position:absolute;left:-62px;top:-62px;width:124px;height:124px;border-radius:50%;
+    border:1.5px solid rgba(143,232,184,.32);background:rgba(143,232,184,.055);
+    box-shadow:inset 0 0 22px rgba(143,232,184,.08),0 0 18px rgba(0,0,0,.35)}
+  .joy-knob{position:absolute;left:-27px;top:-27px;width:54px;height:54px;border-radius:50%;
+    background:radial-gradient(circle at 40% 34%,#bff5dd,#3f8f6c 72%);
+    box-shadow:0 0 18px rgba(143,232,184,.55),inset 0 0 10px rgba(0,0,0,.35)}
+  .tbtn{position:absolute;pointer-events:auto;cursor:pointer;border:1px solid var(--edge);
+    border-radius:50%;color:#dff5e8;font-family:inherit;font-weight:800;letter-spacing:.08em;
+    background:var(--panel);backdrop-filter:blur(8px);box-shadow:0 0 20px rgba(0,0,0,.4);
+    text-shadow:0 1px 3px rgba(0,0,0,.9)}
+  #beamBtn{right:20px;bottom:176px;width:86px;height:86px;font-size:12px;
+    background:radial-gradient(circle at 50% 40%,rgba(143,232,184,.28),var(--panel) 70%)}
+  #beamBtn:active{background:radial-gradient(circle at 50% 40%,rgba(143,232,184,.65),var(--panel) 78%)}
+  #cloakBtn{top:66px;right:16px;width:46px;height:46px;font-size:8px;letter-spacing:.04em}
+  /* touch-only: hide the on-screen action buttons on true mouse/desktop */
+  @media (hover:hover) and (pointer:fine){ #beamBtn,#cloakBtn{display:none} }
+
   #hBuff{top:118px;right:16px;text-align:right;display:none}
   #hBuff .wx{font-size:11px;font-weight:700;color:var(--good)}
+  #hBuff.expiring{animation:buffPulse .8s ease-in-out infinite}
+  @keyframes buffPulse{0%,100%{opacity:1}50%{opacity:.4}}
   #spBtn{position:absolute;right:18px;bottom:92px;width:72px;height:72px;border-radius:50%;
     pointer-events:auto;cursor:pointer;border:1px solid var(--edge);
     color:#dff5e8;text-shadow:0 1px 3px rgba(0,0,0,.9);
@@ -110,6 +150,11 @@
   #hMission{top:172px;left:16px;max-width:200px}
   #hMission .mtx{font-size:10px;color:var(--ink);letter-spacing:.08em;line-height:1.5;margin-top:4px}
   .mnum{color:var(--beam);font-weight:700}
+  /* per-type quest counters (collected vs required) */
+  .mitems{display:flex;flex-wrap:wrap;gap:3px 10px;margin-top:5px}
+  .mitems .mi{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);white-space:nowrap}
+  .mitems .mi b{color:var(--beam);font-weight:700}
+  .mitems .mi.done,.mitems .mi.done b{color:var(--good)}
   #minimap{position:absolute;left:16px;bottom:66px;width:110px;height:110px;z-index:6;
     border-radius:50%;border:1px solid var(--edge);background:rgba(4,10,8,.55);
     backdrop-filter:blur(4px);box-shadow:0 0 20px rgba(0,0,0,.5);opacity:0;transition:opacity .5s;
@@ -282,7 +327,7 @@
 <!-- HUD -->
 <div id="hud">
   <div class="panel" id="hScore"><div class="lbl" data-i18n="hud.harvest">Harvest</div><div class="val" id="scoreV">0</div><div class="lbl" id="specV">0 taken</div></div>
-  <div class="panel" id="hStory" style="display:none"><div class="lbl" data-i18n="hud.directive">Directive</div><div class="mtx" id="sTxt">—</div></div>
+  <div class="panel" id="hStory" style="display:none"><div class="lbl" data-i18n="hud.directive">Directive</div><div class="mtx" id="sTxt">—</div><div class="mitems" id="sItems" style="display:none"></div></div>
   <div class="panel" id="hMission"><div class="lbl" data-i18n="hud.sidequest">Side quest</div><div class="mtx" id="mTxt">—</div></div>
   <div class="panel" id="hClock"><div class="lbl" data-i18n="hud.window">Survey window</div><div class="val" id="clockV">--:--</div></div>
   <div id="hRegion">
@@ -295,6 +340,8 @@
   <div class="panel" id="hBuff"><div class="lbl" data-i18n="hud.boon">Boon</div><div class="wx" id="buffName">—</div></div>
   <button id="pauseBtn" class="hbtn" aria-label="Menu">❚❚</button>
   <button id="spBtn" aria-label="Special pull" data-i18n="hud.pull">PULL</button>
+  <button id="beamBtn" class="tbtn" aria-label="Beam" data-i18n="hud.beam">BEAM</button>
+  <button id="cloakBtn" class="tbtn" aria-label="Cloak" data-i18n="hud.cloakBtn">CLOAK</button>
   <div id="cloakRing" aria-hidden="true">
     <svg viewBox="0 0 44 44"><circle class="bg" cx="22" cy="22" r="19"/><circle class="fg" cx="22" cy="22" r="19"/></svg>
     <div class="cap" data-i18n="hud.cloaking">CLOAK</div>
@@ -305,6 +352,9 @@
 </div>
 
 <canvas id="minimap" width="150" height="150"></canvas>
+<!-- twin virtual joysticks: dynamic origin, one per screen half (touch only) -->
+<div id="joyL" class="joy"><div class="joy-base"></div><div class="joy-knob"></div></div>
+<div id="joyR" class="joy"><div class="joy-base"></div><div class="joy-knob"></div></div>
 <div id="pop"></div>
 <div id="banner"></div>
 

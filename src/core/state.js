@@ -17,10 +17,14 @@ export const S={
   isDay:true, dayF:1, storyMode:false,
   cloak:false, warnLevel:0, elapsed:0,
   hover:HOVER_BASE,        // commanded height above terrain; swipe on the ship to change
+  hoverV:0,                // climb/dive rate (world u/s) — integrated with momentum
   agl:HOVER_BASE,          // actual height above ground, recomputed each frame
   beamStr:1,               // beam strength multiplier from altitude (1 at HOVER_BASE)
   vel:new THREE.Vector3(),
+  yaw:0, yawV:0,           // ship heading (rad) + its angular velocity; the flight frame turns with it
   tiltX:0,tiltZ:0,
+  // rolling "last living point" for the story-mode respawn (see main.js)
+  safePos:new THREE.Vector3(0,40,0), safeYaw:0, safeT:0,
 };
 
 /* Chase camera. camOffset is where the camera sits relative to the saucer;

@@ -6,7 +6,8 @@
 import { THREE } from './core/three.js';
 import { env } from './core/env.js';
 import { lerp, clamp, ramp } from './core/math.js';
-import { HOVER_BASE, HOVER_MIN, HOVER_MAX, HOVER_KEY_RATE, CAM_ZOOM_LOW, CAM_ZOOM_HIGH,
+import { HOVER_BASE, HOVER_MIN, HOVER_MAX, HOVER_ACC, HOVER_DRAG, HOVER_VMAX,
+         YAW_ACC, YAW_DRAG, YAW_VMAX, MOVE_ACC, CAM_ZOOM_LOW, CAM_ZOOM_HIGH,
          BEAM_STR_LOW, BEAM_STR_HIGH, DRAIN_ALT_LOW, DRAIN_ALT_HIGH } from './core/constants.js';
 import { S, camOffset, camLook } from './core/state.js';
 import { renderer, scene, camera, sun, stars, moon } from './core/engine.js';
@@ -47,7 +48,7 @@ import { clockV, cloakRing, cloakArc, altScale, altKnob, altVal } from './ui/dom
 import { drawMinimap } from './ui/minimap.js';
 import { updateFlare } from './ui/flare.js';
 import { renderFrame, allocRT } from './ui/postfx.js';
-import { endGame } from './ui/screens.js';
+import { endGame, respawn } from './ui/screens.js';
 
 import { diagFinish, loadAllAssets, spawnModel } from './assets.js';
 import { t as tr, applyStaticDOM, onLang } from './i18n.js';   // aliased: `t` is used locally for time in animate()
@@ -61,22 +62,18 @@ const clock=new THREE.Clock();
 
 /* Ship-gesture feedback: the cloak hold ring and the altitude scale. Both are
    driven off `input`, and both hide themselves when their gesture is idle. */
-const RING_LEN=2*Math.PI*19;   // r=19 in the SVG viewBox
-let altHudT=0;                 // keeps the altitude scale up briefly after W/S release
+let altHudT=0;                 // keeps the altitude scale up briefly after an altitude change
 let camZoom=1;                 // chase-camera distance multiplier, eased toward altitude
 function updateShipGestureHUD(){
-  if(cloakRing){
-    const p=input.cloakProg;
-    cloakRing.classList.toggle('on',p>0.02);
-    if(cloakArc)cloakArc.style.strokeDashoffset=(RING_LEN*(1-p)).toFixed(1);
-  }
   if(altScale){
-    const swiping=input.shipSwiping||altHudT>0;   // touch swipe or W/S
-    altScale.classList.toggle('on',swiping);
-    if(swiping){
+    const showBar=altHudT>0;   // W/S or the left joystick's vertical axis
+    altScale.classList.toggle('on',showBar);
+    if(showBar){
       const f=(S.hover-HOVER_MIN)/(HOVER_MAX-HOVER_MIN);   // 0 at floor, 1 at ceiling
       altKnob.style.top=((1-f)*100).toFixed(1)+'%';
       altVal.textContent=Math.round(S.hover)+'m';
+      altScale.classList.toggle('climb',S.hoverV>0.6);
+      altScale.classList.toggle('dive',S.hoverV<-0.6);
     }
   }
 }
@@ -100,37 +97,62 @@ function animate(){
   if(S.state==='playing'){
     /* ---- beam hold: pointer down or space ---- */
     const beamOn=input.beamHold||keys[' ']||Special.active;
+    // Opening the beam breaks cloak — you cannot feed while invisible (req 1).
+    if(beamOn&&S.cloak){S.cloak=false;beep(300,0.14,0.06);}
     S.beamPower=lerp(S.beamPower,beamOn?1:0,Math.min(1,dt*7));
     if(beamOn&&!S.prevBeam)BeamSFX.start();
     if(!beamOn&&S.prevBeam)BeamSFX.stop();
     S.prevBeam=beamOn;
     BeamSFX.set(S.beamPower);
 
-    /* ---- movement input ----
-       W/S are altitude (below), not forward/back. The arrows keep all four
-       ground directions, and A/D still strafe. */
-    let ix=0,iz=0;
-    if(keys['arrowup'])iz-=1;
-    if(keys['arrowdown'])iz+=1;
-    if(keys['a']||keys['arrowleft'])ix-=1;
-    if(keys['d']||keys['arrowright'])ix+=1;
-    if(input.dragActive){ix+=input.dragVX;iz+=input.dragVY;}
-    const il=Math.hypot(ix,iz)||1; if(il>1){ix/=il;iz/=il;}
-    const ACC=110*(beamOn?0.42:1)*(buff==='speed'?1.6:1)*(World.name==='moon'?1.55:1)*(1.25-0.4*S.dayF);   // faster at night
-    S.vel.x+=ix*ACC*dt; S.vel.z+=iz*ACC*dt;
+    /* ---- heading: ← / → (desktop) or the right joystick's x-axis (touch) spin
+       the ship on its own axis. Momentum: the intent accelerates S.yawV, which
+       then coasts down and is capped, so turns wind up and unwind. ---- */
+    let turn=input.tTurn;
+    if(keys['arrowleft'])turn-=1;
+    if(keys['arrowright'])turn+=1;
+    turn=clamp(turn,-1,1);
+    S.yawV+=turn*YAW_ACC*dt;
+    S.yawV*=Math.pow(YAW_DRAG,dt);
+    S.yawV=clamp(S.yawV,-YAW_VMAX,YAW_VMAX);
+    S.yaw-=S.yawV*dt;                                  // +turn (right) swings the nose clockwise
+
+    /* ---- translation, relative to the heading:
+         forward/back  ↑ / ↓  or right-joystick y
+         strafe        A / D  or left-joystick x                              ---- */
+    const fx=-Math.sin(S.yaw), fz=-Math.cos(S.yaw);    // nose / forward (into the screen at yaw 0)
+    const rx= Math.cos(S.yaw), rz=-Math.sin(S.yaw);    // ship's right
+    let fwd=input.tFwd, side=input.tStrafe;
+    if(keys['arrowup'])fwd+=1;
+    if(keys['arrowdown'])fwd-=1;
+    if(keys['d'])side+=1;
+    if(keys['a'])side-=1;
+    fwd=clamp(fwd,-1,1);side=clamp(side,-1,1);
+    const il=Math.hypot(fwd,side); if(il>1){fwd/=il;side/=il;}
+    const moveMag=Math.min(1,Math.hypot(fwd,side));
+    const ax=rx*side+fx*fwd, az=rz*side+fz*fwd;
+    const ACC=MOVE_ACC*(beamOn?0.5:1)*(buff==='speed'?1.6:1)*(World.name==='moon'?1.4:1)*(1.2-0.35*S.dayF);   // faster at night
+    S.vel.x+=ax*ACC*dt; S.vel.z+=az*ACC*dt;
     // drag / gradual stop with delay
-    const drag=Math.pow(World.name==='moon'?(beamOn?0.02:0.035):(beamOn?0.03:0.06),dt);
+    const drag=Math.pow(World.name==='moon'?(beamOn?0.03:0.05):(beamOn?0.04:0.08),dt);
     S.vel.x*=drag; S.vel.z*=drag;
     saucer.position.x+=S.vel.x*dt;
     saucer.position.z+=S.vel.z*dt;
 
-    // altitude: float S.hover above the terrain. Swipe the ship on touch, or
-    // hold W / S on desktop — both write the same commanded height.
-    let ah=0;
+    /* ---- altitude: W / S or the left joystick's y-axis. Momentum-driven — the
+       input feeds a climb rate (hoverV) that eases in and coasts out, so a climb
+       reads like a takeoff and a descent like a settling landing. ---- */
+    let ah=input.tClimb;
     if(keys['w'])ah+=1;
     if(keys['s'])ah-=1;
-    if(ah){S.hover=clamp(S.hover+ah*HOVER_KEY_RATE*dt,HOVER_MIN,HOVER_MAX);altHudT=0.8;}
-    else altHudT=Math.max(0,altHudT-dt);
+    ah=clamp(ah,-1,1);
+    S.hoverV+=ah*HOVER_ACC*dt;
+    S.hoverV*=Math.pow(HOVER_DRAG,dt);
+    S.hoverV=clamp(S.hoverV,-HOVER_VMAX,HOVER_VMAX);
+    S.hover+=S.hoverV*dt;
+    if(S.hover<HOVER_MIN){S.hover=HOVER_MIN;if(S.hoverV<0)S.hoverV=0;}
+    if(S.hover>HOVER_MAX){S.hover=HOVER_MAX;if(S.hoverV>0)S.hoverV=0;}
+    if(ah||Math.abs(S.hoverV)>0.4)altHudT=0.8; else altHudT=Math.max(0,altHudT-dt);
     // The absolute floor scales with the commanded hover, otherwise it would
     // pin the ship at 26 and descending would do nothing over low ground.
     // The surface the ship flies over is the terrain OR the road deck above it,
@@ -150,11 +172,14 @@ function animate(){
     const drainAlt=ramp(S.agl,HOVER_MIN,HOVER_BASE,HOVER_MAX,DRAIN_ALT_LOW,1,DRAIN_ALT_HIGH);
     updateShipGestureHUD();
 
-    // banking swing
-    S.tiltZ=lerp(S.tiltZ,-S.vel.x*0.012,Math.min(1,dt*4));
-    S.tiltX=lerp(S.tiltX, S.vel.z*0.012,Math.min(1,dt*4));
+    // banking swing: roll into the turn, plus pitch/roll from motion in the
+    // ship's own frame so the tilt stays sane at any heading.
+    const localVX=S.vel.x*rx+S.vel.z*rz;   // sideways speed
+    const localVZ=S.vel.x*fx+S.vel.z*fz;   // forward speed
+    S.tiltZ=lerp(S.tiltZ,-localVX*0.010-S.yawV*0.16,Math.min(1,dt*4));
+    S.tiltX=lerp(S.tiltX, localVZ*0.010,Math.min(1,dt*4));
+    saucer.rotation.y=S.yaw;
     saucer.rotation.z=S.tiltZ; saucer.rotation.x=S.tiltX;
-    saucer.rotation.y+=dt*0.4;
     saucer.userData.lights.rotation.y-=dt*1.5;
 
     /* ---- beam + disc ---- */
@@ -213,7 +238,7 @@ function animate(){
 
     /* ---- energy ---- */
     if(S.energyMode==='drain'){
-      const im=Math.min(1,Math.hypot(ix,iz));
+      const im=moveMag;
       // drainAlt scales the whole rate: holding a high hover costs the reactor
       // more, and projecting the beam that much further costs more again.
       const dr=(1/160+(beamOn?1/70:0)+(Special.active?1/45:0)+im/220+(S.cloak?1/55:0))*drainAlt;
@@ -248,12 +273,23 @@ function animate(){
     // Anchored so zoom is exactly 1.0 at HOVER_BASE — the resting framing stays
     // what camOffset was tuned for, and only leaving that height moves it.
     camZoom=lerp(camZoom,ramp(S.agl,HOVER_MIN,HOVER_BASE,HOVER_MAX,CAM_ZOOM_LOW,1,CAM_ZOOM_HIGH),Math.min(1,dt*2));
-    const desired=_v.set(saucer.position.x+camOffset.x*camZoom,saucer.position.y+camOffset.y*camZoom,saucer.position.z+camOffset.z*camZoom);
+    // Chase camera rides behind the nose: rotate the offset by the heading so the
+    // view swings with the ship and "forward" stays into the screen. input.zoom
+    // is the pinch-to-zoom multiplier layered on top of the altitude zoom.
+    const z=camZoom*input.zoom;
+    const cs=Math.sin(S.yaw), cc=Math.cos(S.yaw);
+    const ox=(camOffset.x*cc+camOffset.z*cs)*z;
+    const oz=(-camOffset.x*cs+camOffset.z*cc)*z;
+    const desired=_v.set(saucer.position.x+ox,saucer.position.y+camOffset.y*z,saucer.position.z+oz);
     camera.position.lerp(desired,Math.min(1,dt*2.4));
     camera.lookAt(saucer.position.x+camLook.x,saucer.position.y+camLook.y,saucer.position.z+camLook.z);
 
     /* ---- clock ---- */
     S.elapsed+=dt;
+    // Remember a "last living point" a couple of seconds back, so the story-mode
+    // respawn drops the ship somewhere it was safe rather than on the fatal spot.
+    S.safeT-=dt;
+    if(S.safeT<=0&&S.energy>0.14&&!S.cloak){S.safeT=2.2;S.safePos.copy(saucer.position);S.safeYaw=S.yaw;}
     dayNightUpdate(dt);
     applyDayNightLight();
     if(!S.endless){
@@ -280,7 +316,8 @@ function animate(){
                       roadHeightAt(saucer.position.x,saucer.position.z));
     if(saucer.position.y<=gh+2.5){
       saucer.position.y=gh+2.5;
-      endGame(S.crashReason||'crash');
+      // Story mode: a fatal hit costs the current mission's progress, not the run.
+      if(Story.active)respawn(); else endGame(S.crashReason||'crash');
     }
   } else if(S.state==='menu'||S.state==='over'){
     /* menu / over idle: gentle drift + slow orbit */

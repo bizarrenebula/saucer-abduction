@@ -5,7 +5,7 @@
    ========================================================================= */
 import { S } from '../core/state.js';
 import { HOVER_BASE } from '../core/constants.js';
-import { input } from '../core/input.js';
+import { input, resetInputTouch } from '../core/input.js';
 import { reseed } from '../world/noise.js';
 import { applyWorld, World, WORLD_CFG } from '../world/world-config.js';
 import { clearWorld, updateChunks } from '../world/chunks.js';
@@ -52,8 +52,9 @@ export function startGame(){
   S.score=0;scoreV.textContent='0';
   S.taken=0;S.tally={};specV.textContent=t('hud.taken',{n:0});
   resetBuffs();
-  Special.charge=1;Special.active=false;input.spHeld=false;
+  Special.charge=1;Special.active=false;input.spHeld=false;resetInputTouch();
   S.energy=1;S.vy=0;saucer.rotation.set(0,0,0);
+  S.yaw=0;S.yawV=0;S.hoverV=0;S.safePos.set(0,40,0);S.safeYaw=0;S.safeT=0;
   applyWorld(S.world);
   S.crystals=0;S.missionIdx=0;S.crashReason=null;
   S.isDay=true;S.dayF=1;S.cloak=false;S.warnLevel=0;S.hover=HOVER_BASE;S.agl=HOVER_BASE;S.beamStr=1;
@@ -74,6 +75,25 @@ export function startGame(){
   Music.set(TRACK_BY_WORLD[S.world]||'drift');
   if(S.world==='mars')setTimeout(()=>banner(t('banner.mars')),900);
   if(S.world==='moon')setTimeout(()=>banner(t('banner.moon')),900);
+}
+/* Story-mode respawn: a fatal hit costs the current mission's progress, not the
+   whole run. The ship reappears at its last safe point, in-progress quest items
+   return to their original spots (Story.respawnStage), and nearby hazards are
+   cleared so the player isn't killed again on the same frame. */
+export function respawn(){
+  S.state='playing';
+  BeamSFX.stop();S.prevBeam=false;S.beamPower=0;
+  S.cloak=false;S.crashReason=null;S.warnLevel=0;
+  S.vel.set(0,0,0);S.vy=0;S.yawV=0;S.hoverV=0;
+  S.hover=HOVER_BASE;S.agl=HOVER_BASE;
+  S.yaw=S.safeYaw||0;
+  saucer.rotation.set(0,S.yaw,0);
+  saucer.position.set(S.safePos.x,S.safePos.y,S.safePos.z);
+  S.energy=Math.max(S.energy,0.6);          // a fresh half-tank so an energy death isn't a loop
+  resetMeteors();resetGeysers();resetLightning();
+  Music.set(TRACK_BY_WORLD[S.world]||'drift');   // an energy death silences the reactor track; bring it back
+  Story.respawnStage();
+  banner(t('banner.respawn'));
 }
 export function endGame(reason){
   S.state='over';

@@ -18,15 +18,33 @@ export const WATER_Y = -3;
 export const CHUNK = 80, SEG = 24;
 
 /* Hover altitude, in world units above the terrain directly below the ship.
-   HOVER_BASE is the resting height the ship has always flown at; swiping up or
-   down on the saucer moves S.hover between HOVER_MIN (skimming the surface —
-   the crash floor is ground+2.5, so this keeps a little clearance) and
-   HOVER_MAX (3x base). HOVER_SENS is world units of altitude per pixel swiped. */
+   HOVER_BASE is the resting height the ship has always flown at; arrow up/down
+   (or a vertical swipe on touch) moves S.hover between HOVER_MIN (skimming the
+   surface — the crash floor is ground+2.5, so this keeps a little clearance)
+   and HOVER_MAX (3x base). The rate is momentum-driven, see the flight-feel
+   constants below. */
 export const HOVER_BASE = 15, HOVER_MIN = 4, HOVER_MAX = HOVER_BASE * 3;
-export const HOVER_SENS = 0.16;
-/* Keyboard climb/dive rate in world units per second (W / S on desktop).
-   The full HOVER_MIN..HOVER_MAX span takes about 2.5s of held key. */
-export const HOVER_KEY_RATE = 16;
+
+/* ---- Flight feel (give the saucer volume + momentum, but agile) ----
+   Nothing is commanded instantly. Translation, altitude and heading each feed a
+   *rate* that accelerates while an input is held, coasts to a stop through its
+   own drag, and is capped. That spin-up + coast-down is what sells a mystical
+   alien ship rather than a dot teleporting to a target — tuned high enough to
+   still feel quick and responsive. Bump the ACC/VMAX values for more agility;
+   raise the DRAG retentions (closer to 1) for more glide/float. */
+export const MOVE_ACC   = 165;   // horizontal thrust accel, world units/s^2
+
+export const HOVER_ACC  = 70;    // world units/s^2 added to the climb rate while held
+export const HOVER_DRAG = 0.015; // per-second retention of climb rate when released (lower = stops sooner)
+export const HOVER_VMAX = 26;    // max climb/dive rate, world units/s
+
+/* Ship heading. ← / → (desktop) or the right joystick x-axis (touch) push an
+   angular acceleration onto S.yawV, which coasts down through YAW_DRAG and is
+   capped at YAW_VMAX. The whole flight frame (translation + chase camera)
+   rotates with S.yaw, so the ship reads as an object banking through the air. */
+export const YAW_ACC  = 8.5;     // rad/s^2 added to spin rate while turning
+export const YAW_DRAG = 0.01;    // per-second retention of spin rate when released (the ship keeps swinging)
+export const YAW_VMAX = 2.5;     // max yaw rate, rad/s
 
 /* Ship collision radius. Deliberately under the ~5u visual hull so glancing
    passes read as near-misses rather than unfair phantom hits. */

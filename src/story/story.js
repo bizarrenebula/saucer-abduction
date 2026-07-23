@@ -18,11 +18,17 @@ import { saucer } from '../systems/saucer.js';
 import { effBeamR } from '../systems/beam.js';
 import { t } from '../i18n.js';
 
+// Mars stage-3 asks for five of each species; tracked per-type so the HUD can
+// show "Strider 3/5 · Tumbler 1/5 …" the way the player asked for.
+const MARS_SPECIES=['Strider','Tumbler','Wormling'], MARS_EACH=5;
+
 export const Story={
   active:false, world:null, stage:0, _pending:0, _last:'',
   // shared holders
   shipPos:null, ship:null, glows:[], debris:[], samples:[], targets:[], structure:null,
   need:{}, count:0, guides:[],
+  species:{},          // mars stage-3 per-species tally
+  _defs:[],            // original spawn definitions of the current stage's collectibles, for respawn
   reset(){
     this.active=false;this.stage=0;this.count=0;this._last='';this.world=null;
     if(this.ship){scene.remove(this.ship);this.ship=null;}
@@ -31,9 +37,42 @@ export const Story={
     this.samples.forEach(s=>scene.remove(s));this.samples.length=0;
     this.targets.forEach(t=>scene.remove(t));this.targets.length=0;
     this.guides.forEach(g=>scene.remove(g));this.guides.length=0;
-    this.glows.length=0;this.shipPos=null;this.need={};
+    this.glows.length=0;this.shipPos=null;this.need={};this.species={};this._defs=[];
+    const box=document.getElementById('sItems');if(box){box.innerHTML='';box.style.display='none';}
     document.getElementById('hStory').style.display='none';
     document.getElementById('storyScreen').classList.add('hidden');
+  },
+  // Build one collectible from a recorded definition, add it to the scene and the
+  // right live list. Used by the spawners (via _spawnItem) and by respawnStage.
+  _makeFromDef(d){
+    let g;
+    if(d.build==='sample')g=this.buildSample(d.kind);
+    else if(d.build==='spyder')g=this.buildSpyder();
+    else if(d.build==='moonRock')g=this.buildMoonRock();
+    else if(d.build==='marsCrystal')g=this.buildMarsCrystal(d.kind);
+    else return null;
+    g.position.set(d.x,d.y,d.z);g.userData.baseY=d.baseY;
+    scene.add(g);(d.list==='targets'?this.targets:this.samples).push(g);
+    return g;
+  },
+  // Spawn a collectible AND remember where it stood, so a respawn can restore it.
+  _spawnItem(build,kind,list,x,y,z,baseY){
+    const d={build,kind,list,x,y,z,baseY};
+    this._defs.push(d);return this._makeFromDef(d);
+  },
+  // Story-mode respawn (req 4): put every in-progress collectible back at its
+  // original spot and zero the stage's collected counters.
+  respawnStage(){
+    if(!this.active)return;
+    this.samples.forEach(s=>scene.remove(s));this.samples.length=0;
+    this.targets.forEach(t=>scene.remove(t));this.targets.length=0;
+    for(const d of this._defs)this._makeFromDef(d);
+    const w=this.world;
+    if(w==='earth'){ if(this.stage===2)this.need={crystal:false,water:false,sand:false}; }
+    else if(w==='moon'){ if(this.stage===1)this.need.spyders=0; else if(this.stage===3)this.need.rocks=0; }
+    else if(w==='mars'){ if(this.stage===2){this.need={red:false,green:false,blue:false,violet:false,white:false};
+        if(this._holes)this._holes.forEach(h=>h.gem.visible=false);} }
+    this._last='';this.hud();
   },
   begin(world){
     this.reset();
@@ -173,6 +212,7 @@ export const Story={
     return g;
   },
   spawnSamples(){
+    this._defs=[];
     const targets=[['water','water'],['sand','desert']];
     for(const [kind,biome] of targets){
       let fx=this.shipPos.x+80,fz=this.shipPos.z;
@@ -184,10 +224,8 @@ export const Story={
           if(sample(x,z).biome===biome){fx=x;fz=z;break outer;}
         }
       }
-      const s=this.buildSample(kind);
       const gy=kind==='water'?WATER_Y+0.35:heightAt(fx,fz);
-      s.position.set(fx,gy,fz);s.userData.baseY=gy;
-      scene.add(s);this.samples.push(s);
+      this._spawnItem('sample',kind,'samples',fx,gy,fz,gy);
     }
   },
 
@@ -195,12 +233,11 @@ export const Story={
   beginMoon(){
     this.need={spyders:0,rocks:0};
     // mission 1: 5 moon spyders scattered wide
+    this._defs=[];
     const pts=this.scatter(5,180,460);
     for(const p of pts){
-      const sp=this.buildSpyder();
-      sp.position.set(p.x,heightAt(p.x,p.z)+0.4,p.z);
-      sp.userData.baseY=sp.position.y;
-      scene.add(sp);this.targets.push(sp);
+      const gy=heightAt(p.x,p.z)+0.4;
+      this._spawnItem('spyder',null,'targets',p.x,gy,p.z,gy);
     }
     setTimeout(()=>banner(t('banner.moonDirective')),900);
   },
@@ -251,6 +288,7 @@ export const Story={
     return g;
   },
   spawnLab(){
+    this._defs=[];    // this stage is a "reach the lab" objective — no collectibles to restore
     const p=this.farPoint(300,440,false);
     this.shipPos=p;   // reuse as destination marker
     this.structure=this.buildLab();
@@ -277,12 +315,11 @@ export const Story={
     return g;
   },
   spawnMoonRocks(){
+    this._defs=[];
     const pts=this.scatter(5,150,420);
     for(const p of pts){
-      const r=this.buildMoonRock();
-      r.position.set(p.x,heightAt(p.x,p.z)+0.2,p.z);
-      r.userData.baseY=r.position.y;
-      scene.add(r);this.targets.push(r);
+      const gy=heightAt(p.x,p.z)+0.2;
+      this._spawnItem('moonRock',null,'targets',p.x,gy,p.z,gy);
     }
   },
 
@@ -349,13 +386,12 @@ export const Story={
     return g;
   },
   spawnMarsCrystals(){
+    this._defs=[];
     const kinds=['red','green','blue','violet','white'];
     const pts=this.scatter(5,160,440);
     kinds.forEach((k,i)=>{
-      const c=this.buildMarsCrystal(k);
       const p=pts[i];const gy=heightAt(p.x,p.z);
-      c.position.set(p.x,gy+0.4,p.z);c.userData.baseY=gy+0.4;
-      scene.add(c);this.samples.push(c);
+      this._spawnItem('marsCrystal',k,'samples',p.x,gy+0.4,p.z,gy+0.4);
     });
     this.need={red:false,green:false,blue:false,violet:false,white:false};
   },
@@ -388,6 +424,30 @@ export const Story={
       else txt=t('story.hud.r.done');
     }
     if(txt!==this._last){document.getElementById('sTxt').innerHTML=txt;this._last=txt;}
+    this._renderItems();
+  },
+  // Per-item breakdown for the current stage: [label, collected, required].
+  _stageItems(){
+    const w=this.world, out=[];
+    if(w==='earth'){
+      if(this.stage===2)out.push([t('label.CRYSTAL'),this.need.crystal?1:0,1],
+        [t('story.item.water'),this.need.water?1:0,1],[t('story.item.sand'),this.need.sand?1:0,1]);
+      else if(this.stage===3)out.push([t('label.CRYSTAL'),Math.min(50,this.count),50]);
+    }else if(w==='moon'){
+      if(this.stage===1)out.push([t('label.SPYDER'),Math.min(5,this.need.spyders||0),5]);
+      else if(this.stage===3)out.push([t('label.ROCK'),Math.min(5,this.need.rocks||0),5]);
+    }else if(w==='mars'){
+      if(this.stage===2)['red','green','blue','violet','white'].forEach(k=>
+        out.push([t('label.'+k.toUpperCase()),this.need[k]?1:0,1]));
+      else if(this.stage===3)MARS_SPECIES.forEach(s=>out.push([t('creature.'+s),Math.min(MARS_EACH,this.species[s]||0),MARS_EACH]));
+    }
+    return out;
+  },
+  _renderItems(){
+    const box=document.getElementById('sItems');if(!box)return;
+    const items=this._stageItems();
+    box.innerHTML=items.map(r=>'<span class="mi'+(r[1]>=r[2]?' done':'')+'">'+r[0]+' <b>'+r[1]+'/'+r[2]+'</b></span>').join('');
+    box.style.display=items.length?'':'none';
   },
 
   /* =================== collection hooks =================== */
@@ -399,12 +459,15 @@ export const Story={
       else if(this.stage===3){this.count++;this.hud();if(this.count>=50)completeStage(3);}
     }
   },
-  // any animal captured (mars mission 3 counts species)
+  // any animal captured (mars mission 3 needs 5 of EACH species)
   animalHook(name){
     if(!this.active)return;
     if(this.world==='mars'&&this.stage===3){
-      this.count++;this.hud();
-      if(this.count>=15)completeStage(3);
+      if(MARS_SPECIES.includes(name)&&(this.species[name]||0)<MARS_EACH)this.species[name]=(this.species[name]||0)+1;
+      // count = sum of capped per-species tallies, matching the n/15 headline
+      this.count=MARS_SPECIES.reduce((a,s)=>a+Math.min(MARS_EACH,this.species[s]||0),0);
+      this.hud();
+      if(MARS_SPECIES.every(s=>(this.species[s]||0)>=MARS_EACH))completeStage(3);
     }
   },
 
@@ -522,20 +585,29 @@ function completeStage(n){
   beep(659,0.2,0.09);setTimeout(()=>beep(880,0.25,0.09),150);setTimeout(()=>beep(1318,0.4,0.09),320);
   Story._pending=n;
 }
+// A visible banner when each mission starts (req 3). Stage 1 announces itself
+// from begin(); stages 2 and 3 are announced here as the player proceeds.
+const STAGE_BANNER={
+  earth:{2:'story.begin.e2',3:'story.begin.e3'},
+  moon :{2:'story.begin.m2',3:'story.begin.m3'},
+  mars :{2:'story.begin.r2',3:'story.begin.r3'},
+};
 export function storyProceed(){
   document.getElementById('storyScreen').classList.add('hidden');
   const n=Story._pending, w=Story.world;
   if(n>=3){Story.stage=4;}
   else if(w==='earth'){
     if(n===1){Story.stage=2;Story.spawnSamples();}
-    else if(n===2){Story.stage=3;Story.count=0;}
+    else if(n===2){Story.stage=3;Story.count=0;Story._defs=[];}
   }else if(w==='moon'){
     if(n===1){Story.stage=2;Story.spawnLab();}
     else if(n===2){Story.stage=3;Story.spawnMoonRocks();}
   }else if(w==='mars'){
     if(n===1){Story.stage=2;Story.spawnMarsCrystals();}
-    else if(n===2){Story.stage=3;Story.count=0;}
+    else if(n===2){Story.stage=3;Story.count=0;Story.species={};Story._defs=[];}
   }
   Story.hud();
   S.state='playing';
+  const key=STAGE_BANNER[w]&&STAGE_BANNER[w][Story.stage];
+  if(key)setTimeout(()=>banner(t(key)),500);
 }

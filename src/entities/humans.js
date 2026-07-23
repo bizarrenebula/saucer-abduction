@@ -74,10 +74,11 @@ export function updateHuman(a,u,dt){
   const dx=a.position.x-saucer.position.x,dz=a.position.z-saucer.position.z;
   const d=Math.hypot(dx,dz)||0.001;
   const night=S.dayF<0.5;
-  const cloaked=S.cloak;
-  const notice = (night||cloaked)
-    ? (S.beamPower>0.4 && d<40)            // night OR cloaked: only the active beam gives you away
-    : (d<34 || (S.beamPower>0.4 && d<55)); // day, uncloaked: they spot the ship itself
+  // Cloaked = fully invisible: humans never notice the ship and go on with their
+  // idle. Only a decloaked ship (cloak drops the instant the beam opens) is seen.
+  const notice = S.cloak ? false
+    : night ? (S.beamPower>0.4 && d<40)     // night: only the active beam gives you away
+    : (d<34 || (S.beamPower>0.4 && d<55));  // day: they spot the ship itself
   if(notice)u.fleeT=1.8;
   if(u.fleeT>0){
     u.fleeT-=dt;

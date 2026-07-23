@@ -39,6 +39,9 @@ export const saucer=new THREE.Group();
 })();
 scene.add(saucer);
 saucer.position.set(0,40,0);
+// YXZ so yaw (heading) is applied first and the pitch/roll bank in the ship's
+// own frame — otherwise a large heading would smear the banking axes.
+saucer.rotation.order='YXZ';
 
 /* saucer glow point light */
 export const beamLight=new THREE.PointLight(0x59ffb0,0,60,2);
