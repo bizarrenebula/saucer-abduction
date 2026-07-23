@@ -400,13 +400,17 @@
   #saucerMenu:not(.editing) #saucerCore.ready .play:not(:disabled){animation:corePulse 1.5s infinite}
   @keyframes corePulse{0%,100%{box-shadow:0 0 22px rgba(89,255,176,.4)}50%{box-shadow:0 0 42px rgba(89,255,176,.85)}}
 
-  /* the pop-up panel that appears in the middle of the saucer */
+  /* the pop-up panel that appears in the middle of the saucer. Capped to the
+     saucer's own height and vertically centred, so it never spills up over the
+     controls above or the loading line below — tall content scrolls instead. */
   #saucerPanel{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:min(300px,78vw);max-height:min(76vh,440px);overflow-y:auto;z-index:6;text-align:left;
+    width:min(300px,78vw);max-height:min(84vw,360px);overflow-y:auto;z-index:6;text-align:left;
     background:rgba(6,12,10,.94);border:1px solid var(--edge);border-radius:16px;
     padding:16px 16px 12px;box-shadow:0 0 46px rgba(0,0,0,.75),inset 0 0 26px rgba(89,255,176,.05);
     backdrop-filter:blur(8px)}
   #saucerPanel.hidden{display:none}
+  /* while a panel is open, fade the rim chips so they don't peek past its edges */
+  #saucerMenu.editing .sector{opacity:0;pointer-events:none}
   .pan{display:none}
   .pan.on{display:block}
   .pan-h{font-size:10px;letter-spacing:.3em;text-transform:uppercase;color:var(--beam-dim);
@@ -414,16 +418,19 @@
   .seg.col{flex-direction:column}
   #saucerPanel .field{margin:10px 0}
   #saucerPanel .field:first-of-type{margin-top:0}
-  .confirm{width:100%;margin-top:14px;padding:11px;border:1px solid transparent;border-radius:11px;cursor:pointer;
+  /* keep the confirm button pinned to the panel's bottom while content scrolls */
+  .confirm{position:sticky;bottom:-12px;width:100%;margin-top:14px;padding:11px;
+    border:1px solid transparent;border-radius:11px;cursor:pointer;
     font-family:inherit;font-size:11px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;
     color:#04160f;background:linear-gradient(180deg,#7dffc0,var(--beam));
-    box-shadow:0 0 22px rgba(89,255,176,.4);transition:transform .1s,box-shadow .2s}
+    box-shadow:0 -8px 16px rgba(6,12,10,.94),0 0 22px rgba(89,255,176,.4);transition:transform .1s,box-shadow .2s}
   .confirm:active{transform:scale(.98)}
 
   @media (max-height:760px), (max-width:430px){
     .setup h1{font-size:24px}
     #saucerMenu{width:min(78vw,300px)}
     #saucerCore .play{font-size:13px}
+    #saucerPanel{max-height:min(78vw,300px)}
   }
 </style>
 </head>
