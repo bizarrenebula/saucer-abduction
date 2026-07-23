@@ -105,12 +105,12 @@ function animate(){
     S.prevBeam=beamOn;
     BeamSFX.set(S.beamPower);
 
-    /* ---- heading: ← / → (desktop) or the right joystick's x-axis (touch) spin
+    /* ---- heading: A / D (desktop) or the left joystick's x-axis (touch) spin
        the ship on its own axis. Momentum: the intent accelerates S.yawV, which
        then coasts down and is capped, so turns wind up and unwind. ---- */
     let turn=input.tTurn;
-    if(keys['arrowleft'])turn-=1;
-    if(keys['arrowright'])turn+=1;
+    if(keys['a'])turn-=1;
+    if(keys['d'])turn+=1;
     turn=clamp(turn,-1,1);
     S.yawV+=turn*YAW_ACC*dt;
     S.yawV*=Math.pow(YAW_DRAG,dt);
@@ -118,15 +118,15 @@ function animate(){
     S.yaw-=S.yawV*dt;                                  // +turn (right) swings the nose clockwise
 
     /* ---- translation, relative to the heading:
-         forward/back  ↑ / ↓  or right-joystick y
-         strafe        A / D  or left-joystick x                              ---- */
+         forward/back  ↑ / ↓  or left-joystick y
+         strafe        ← / →  or right-joystick x                             ---- */
     const fx=-Math.sin(S.yaw), fz=-Math.cos(S.yaw);    // nose / forward (into the screen at yaw 0)
     const rx= Math.cos(S.yaw), rz=-Math.sin(S.yaw);    // ship's right
     let fwd=input.tFwd, side=input.tStrafe;
     if(keys['arrowup'])fwd+=1;
     if(keys['arrowdown'])fwd-=1;
-    if(keys['d'])side+=1;
-    if(keys['a'])side-=1;
+    if(keys['arrowright'])side+=1;
+    if(keys['arrowleft'])side-=1;
     fwd=clamp(fwd,-1,1);side=clamp(side,-1,1);
     const il=Math.hypot(fwd,side); if(il>1){fwd/=il;side/=il;}
     const moveMag=Math.min(1,Math.hypot(fwd,side));
