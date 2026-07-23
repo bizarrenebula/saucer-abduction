@@ -25,6 +25,7 @@ import { animals, vehicles } from './registry.js';
 import { buildHuman } from './humans.js';
 import { chunks, chunkKey } from '../world/chunks.js';
 import { saucer } from '../systems/saucer.js';
+import { carHonk } from '../audio/sfx.js';
 
 /* `block` marks a vehicle tall enough to stop the ship rather than be flown
    over. Cars are low: you always clear them. A bus is not — meet one at its own
@@ -157,7 +158,7 @@ export function updateVehicles(dt,beamActive){
     }
     const inBeam=R>0&&d2<R*R;
     if(inBeam){
-      if(u.lift===0)u.grabY=g.position.y;               // remember pickup height
+      if(u.lift===0){u.grabY=g.position.y;carHonk();}   // remember pickup height + honk in protest
       u.lift=Math.min(1,u.lift+dt*0.5);
       const mid=(u.grabY+saucer.position.y)*0.5;        // the midpoint it can reach
       g.position.y=u.grabY+(mid-u.grabY)*u.lift;
