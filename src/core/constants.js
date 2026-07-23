@@ -33,6 +33,8 @@ export const HOVER_BASE = 15, HOVER_MIN = 4, HOVER_MAX = HOVER_BASE * 3;
    still feel quick and responsive. Bump the ACC/VMAX values for more agility;
    raise the DRAG retentions (closer to 1) for more glide/float. */
 export const MOVE_ACC   = 165;   // horizontal thrust accel, world units/s^2
+export const BEAM_MOVE  = 0.6;   // thrust multiplier while the beam is open — you can still
+                                 // fly and steer, but slower (the ship is heavy while feeding)
 
 export const HOVER_ACC  = 70;    // world units/s^2 added to the climb rate while held
 export const HOVER_DRAG = 0.015; // per-second retention of climb rate when released (lower = stops sooner)

@@ -47,11 +47,17 @@ function moveKnob(h,dx,dy){ const el=joy(h); if(!el)return; const k=el.querySele
 function hideJoy(h){ const el=joy(h); if(el)el.classList.remove('on'); }
 function setBeaming(on){ const el=joy('R'); if(el)el.classList.toggle('beaming',on); }   // hides the "double-tap" hint while beaming
 
+// LEFT stick = fly the body (strafe + forward/back); RIGHT stick = turn + altitude.
+// So the left thumb moves the saucer through the air and the right aims + works
+// height/beam — the whole thing reads as piloting the craft, not nudging a dot.
 function setAxes(h,vx,vy){
-  if(h==='L'){input.tStrafe=vx;input.tClimb=-vy;}   // up on screen = climb
-  else{input.tFwd=-vy;input.tTurn=vx;}              // up on screen = forward
+  if(h==='L'){input.tStrafe=dz(vx);input.tFwd=dz(-vy);}    // up on screen = forward
+  else{input.tTurn=dz(vx);input.tClimb=dz(-vy);}           // up on screen = climb
 }
-function clearAxes(h){ if(h==='L'){input.tStrafe=0;input.tClimb=0;} else {input.tFwd=0;input.tTurn=0;} }
+function clearAxes(h){ if(h==='L'){input.tStrafe=0;input.tFwd=0;} else {input.tTurn=0;input.tClimb=0;} }
+// centre deadzone + rescale so a resting thumb reads as neutral and the usable
+// travel still spans the full -1..1 — key to a stick that feels natural.
+function dz(v){ const d=0.12, a=Math.abs(v); return a<d?0:Math.sign(v)*((a-d)/(1-d)); }
 
 // per-half state; `ids` holds the active pointer ids that started in that half.
 // The right half also tracks a double-tap so it can open the beam (see below).

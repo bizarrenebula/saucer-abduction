@@ -98,7 +98,7 @@ const STRINGS = {
     'hud.beamMult':'beam',
     'hud.pull':'PULL','hud.cloakBtn':'CLOAK','hud.dblBeam':'double-tap to beam',
     // --- controls ---
-    'ctrl.touch':'<b>left stick</b> strafe + altitude &nbsp;·&nbsp; <b>right stick</b> move + turn &nbsp;·&nbsp; <b>double-tap right</b> to beam &nbsp;·&nbsp; pinch to zoom',
+    'ctrl.touch':'<b>left stick</b> fly (move + strafe) &nbsp;·&nbsp; <b>right stick</b> turn + altitude &nbsp;·&nbsp; <b>double-tap right</b> to beam &nbsp;·&nbsp; pinch to zoom',
     'ctrl.desktop':'<b>↑ ↓</b> move &nbsp;·&nbsp; <b>← →</b> turn &nbsp;·&nbsp; <b>W</b>/<b>S</b> altitude &nbsp;·&nbsp; <b>A</b>/<b>D</b> strafe &nbsp;·&nbsp; <b>space</b> beam &nbsp;·&nbsp; <b>Q</b> pull &nbsp;·&nbsp; <b>C</b> cloak',
     // --- splash / diag ---
     'splash.mobile':'<div><b>mobile mode</b></div><div>procedural graphics · optimized for speed</div>',
@@ -252,7 +252,7 @@ const STRINGS = {
     'hud.lock':'захват · {name} · +{pts}',
     'hud.beamMult':'луч',
     'hud.pull':'ТЯГА','hud.cloakBtn':'МАСКИР','hud.dblBeam':'двойной тап — луч',
-    'ctrl.touch':'<b>левый стик</b> — стрейф + высота &nbsp;·&nbsp; <b>правый стик</b> — движение + поворот &nbsp;·&nbsp; <b>двойной тап справа</b> — луч &nbsp;·&nbsp; щипок — зум',
+    'ctrl.touch':'<b>левый стик</b> — полёт (движение + стрейф) &nbsp;·&nbsp; <b>правый стик</b> — поворот + высота &nbsp;·&nbsp; <b>двойной тап справа</b> — луч &nbsp;·&nbsp; щипок — зум',
     'ctrl.desktop':'<b>↑ ↓</b> — движение &nbsp;·&nbsp; <b>← →</b> — поворот &nbsp;·&nbsp; <b>W</b>/<b>S</b> — высота &nbsp;·&nbsp; <b>A</b>/<b>D</b> — стрейф &nbsp;·&nbsp; <b>пробел</b> — луч &nbsp;·&nbsp; <b>Q</b> — тяга &nbsp;·&nbsp; <b>C</b> — маскировка',
     'splash.mobile':'<div><b>мобильный режим</b></div><div>процедурная графика · оптимизировано для скорости</div>',
     'diag.builtin':'встроенный',
@@ -395,7 +395,7 @@ const STRINGS = {
     'hud.lock':'цел · {name} · +{pts}',
     'hud.beamMult':'лъч',
     'hud.pull':'ТЯГА','hud.cloakBtn':'МАСКИР','hud.dblBeam':'двойно докосване — лъч',
-    'ctrl.touch':'<b>ляв стик</b> — странично + височина &nbsp;·&nbsp; <b>десен стик</b> — движение + завъртане &nbsp;·&nbsp; <b>двойно докосване вдясно</b> — лъч &nbsp;·&nbsp; щипни за мащаб',
+    'ctrl.touch':'<b>ляв стик</b> — летене (движение + странично) &nbsp;·&nbsp; <b>десен стик</b> — завъртане + височина &nbsp;·&nbsp; <b>двойно докосване вдясно</b> — лъч &nbsp;·&nbsp; щипни за мащаб',
     'ctrl.desktop':'<b>↑ ↓</b> — движение &nbsp;·&nbsp; <b>← →</b> — завъртане &nbsp;·&nbsp; <b>W</b>/<b>S</b> — височина &nbsp;·&nbsp; <b>A</b>/<b>D</b> — странично &nbsp;·&nbsp; <b>интервал</b> — лъч &nbsp;·&nbsp; <b>Q</b> — тяга &nbsp;·&nbsp; <b>C</b> — маскировка',
     'splash.mobile':'<div><b>мобилен режим</b></div><div>процедурна графика · оптимизирано за скорост</div>',
     'diag.builtin':'вграден',

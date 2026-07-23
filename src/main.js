@@ -7,7 +7,7 @@ import { THREE } from './core/three.js';
 import { env } from './core/env.js';
 import { lerp, clamp, ramp } from './core/math.js';
 import { HOVER_BASE, HOVER_MIN, HOVER_MAX, HOVER_ACC, HOVER_DRAG, HOVER_VMAX,
-         YAW_ACC, YAW_DRAG, YAW_VMAX, MOVE_ACC, CAM_ZOOM_LOW, CAM_ZOOM_HIGH,
+         YAW_ACC, YAW_DRAG, YAW_VMAX, MOVE_ACC, BEAM_MOVE, CAM_ZOOM_LOW, CAM_ZOOM_HIGH,
          BEAM_STR_LOW, BEAM_STR_HIGH, DRAIN_ALT_LOW, DRAIN_ALT_HIGH } from './core/constants.js';
 import { S, camOffset, camLook } from './core/state.js';
 import { renderer, scene, camera, sun, stars, moon } from './core/engine.js';
@@ -131,10 +131,12 @@ function animate(){
     const il=Math.hypot(fwd,side); if(il>1){fwd/=il;side/=il;}
     const moveMag=Math.min(1,Math.hypot(fwd,side));
     const ax=rx*side+fx*fwd, az=rz*side+fz*fwd;
-    const ACC=MOVE_ACC*(beamOn?0.5:1)*(buff==='speed'?1.6:1)*(World.name==='moon'?1.4:1)*(1.2-0.35*S.dayF);   // faster at night
+    // Beaming keeps full steering but cuts thrust (BEAM_MOVE) — you fly slower
+    // while feeding, not stuck. Handling (drag) stays the same so it still glides.
+    const ACC=MOVE_ACC*(beamOn?BEAM_MOVE:1)*(buff==='speed'?1.6:1)*(World.name==='moon'?1.4:1)*(1.2-0.35*S.dayF);   // faster at night
     S.vel.x+=ax*ACC*dt; S.vel.z+=az*ACC*dt;
     // drag / gradual stop with delay
-    const drag=Math.pow(World.name==='moon'?(beamOn?0.03:0.05):(beamOn?0.04:0.08),dt);
+    const drag=Math.pow(World.name==='moon'?0.05:0.08,dt);
     S.vel.x*=drag; S.vel.z*=drag;
     saucer.position.x+=S.vel.x*dt;
     saucer.position.z+=S.vel.z*dt;
