@@ -52,6 +52,12 @@ export const YAW_VMAX = 2.5;     // max yaw rate, rad/s
    passes read as near-misses rather than unfair phantom hits. */
 export const SHIP_R = 4.0;
 
+/* Terrain above this height reads as a MOUNTAIN and is solid — flying into it at
+   low altitude crashes the ship. Hills (below it) are ridden over as before, and
+   a high enough hover still clears a peak. Earth hills top out ~18 while mountain
+   terrain climbs past 26 into snow at 36+, so this cleanly splits the two. */
+export const MTN_H = 26;
+
 /* Chase-camera distance/height scale by altitude: descending pulls the camera
    in tight, climbing pulls it back for a wider view. 1.0 at HOVER_BASE. */
 export const CAM_ZOOM_LOW = 0.62, CAM_ZOOM_HIGH = 1.5;

@@ -7,7 +7,7 @@ import { THREE } from './core/three.js';
 import { env } from './core/env.js';
 import { lerp, clamp, ramp } from './core/math.js';
 import { HOVER_BASE, HOVER_MIN, HOVER_MAX, HOVER_ACC, HOVER_DRAG, HOVER_VMAX,
-         YAW_ACC, YAW_DRAG, YAW_VMAX, MOVE_ACC, BEAM_MOVE, CAM_ZOOM_LOW, CAM_ZOOM_HIGH,
+         YAW_ACC, YAW_DRAG, YAW_VMAX, MOVE_ACC, BEAM_MOVE, MTN_H, CAM_ZOOM_LOW, CAM_ZOOM_HIGH,
          BEAM_STR_LOW, BEAM_STR_HIGH, DRAIN_ALT_LOW, DRAIN_ALT_HIGH } from './core/constants.js';
 import { S, camOffset, camLook } from './core/state.js';
 import { renderer, scene, camera, sun, stars, moon } from './core/engine.js';
@@ -179,6 +179,19 @@ function animate(){
     S.beamStr=ramp(S.agl,HOVER_MIN,HOVER_BASE,HOVER_MAX,BEAM_STR_LOW,1,BEAM_STR_HIGH);
     const drainAlt=ramp(S.agl,HOVER_MIN,HOVER_BASE,HOVER_MAX,DRAIN_ALT_LOW,1,DRAIN_ALT_HIGH);
     updateShipGestureHUD();
+
+    // Mountains are solid. Sample the terrain a little ahead along travel: if it's
+    // a mountain (above MTN_H) and the hull is below its face, you crash into it.
+    // Hills stay passable, and climbing high enough still clears a peak.
+    const sp=Math.hypot(S.vel.x,S.vel.z);
+    if(sp>2){
+      const hx=saucer.position.x+S.vel.x/sp*8, hz=saucer.position.z+S.vel.z/sp*8;
+      const hAhead=heightAt(hx,hz);
+      if(hAhead>MTN_H&&saucer.position.y-1.5<hAhead){
+        S.crashReason='impact';S.state='crashing';S.vy=-3;
+        BeamSFX.stop();S.prevBeam=false;
+      }
+    }
 
     // banking swing: roll into the turn, plus pitch/roll from motion in the
     // ship's own frame so the tilt stays sane at any heading.
@@ -400,11 +413,8 @@ document.addEventListener('visibilitychange',()=>{
   if(!document.hidden&&Music.ac&&Music.ac.state==='suspended')Music.ac.resume();
 });
 
-const _touch=matchMedia('(pointer:coarse)').matches;
-function setCtrlHint(){ document.getElementById('ctrlHint').innerHTML=tr(_touch?'ctrl.touch':'ctrl.desktop'); }
-setCtrlHint();
 applyStaticDOM();   // apply the saved language to every static [data-i18n] element on load
-onLang(()=>{ setCtrlHint(); const n=document.getElementById('loadNote'); if(n&&assetsReady)n.textContent=tr('loadNote.ready'); });
+onLang(()=>{ const n=document.getElementById('loadNote'); if(n&&assetsReady)n.textContent=tr('loadNote.ready'); });
 reseed();updateChunks(0,0);
 
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);allocRT();});
