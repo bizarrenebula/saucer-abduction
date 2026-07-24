@@ -23,6 +23,9 @@ export const ANIMALS={
   water  :{name:'Duck',  pts:2, size:0.7,  turn:2.2}
 };
 export function buildAnimal(biome){
+  // Forests share the plains fauna (sheep), canyons the desert fauna (camel);
+  // anything unmapped falls back to plains — so a new terrain biome never crashes.
+  if(!ANIMALS[biome]) biome = (biome==='canyon') ? 'desert' : 'plains';
   const info=ANIMALS[biome];const s=info.size*OBJ_SCALE;
   // --- custom model path ---
   const modelName=(biome==='plains')?'sheep':(biome==='water')?'duck':(biome==='desert')?'camel':(biome==='mountain')?'goat':null;

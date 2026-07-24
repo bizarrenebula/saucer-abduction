@@ -5,7 +5,7 @@
    ========================================================================= */
 import { THREE } from '../core/three.js';
 import { env } from '../core/env.js';
-import { CHUNK, SEG, WATER_Y, GROUND_TILING, VEH_PER_CHUNK, STATION_CHANCE, PROP_ROAD_GAP } from '../core/constants.js';
+import { CHUNK, SEG, WATER_Y, MTN_H, GROUND_TILING, VEH_PER_CHUNK, STATION_CHANCE, PROP_ROAD_GAP } from '../core/constants.js';
 import { scene } from '../core/engine.js';
 import { World } from './world-config.js';
 import { sample } from './terrain.js';
@@ -64,8 +64,9 @@ export function buildChunk(cx,cz){
     pos.setY(i,sm.h);
     colors[i*3]=sm.r;colors[i*3+1]=sm.g;colors[i*3+2]=sm.b;
     bios[i]=sm.biomeId!=null?sm.biomeId
-      :(sm.biome==='mountain')?(sm.h>36?3:2)
-      :(sm.biome==='plains'&&sm.h>=WATER_Y+1.4)?0:1;
+      :(sm.biome==='mountain')?(sm.h>40?3:2)      // snow cap / rock
+      :(sm.biome==='canyon')?2                     // rock
+      :((sm.biome==='plains'||sm.biome==='forest')&&sm.h>=WATER_Y+1.4)?0:1;  // grass / sand
   }
   geo.setAttribute('color',new THREE.BufferAttribute(colors,3));
   geo.setAttribute('aBiome',new THREE.BufferAttribute(bios,1));
@@ -81,7 +82,10 @@ export function buildChunk(cx,cz){
     const sm=sample(wx,wz);
     let a;
     if(World.name==='earth'){
-      const chance=(sm.biome==='water')?0.72:0.5;
+      // Keep fauna off mountains, out of canyons and off open/deep water.
+      if(sm.biome==='mountain'||sm.biome==='canyon'||sm.h>MTN_H-4) continue;
+      if(sm.biome==='water'&&sm.h<WATER_Y-1.5) continue;   // shore ducks only, no deep water
+      const chance=(sm.biome==='water')?0.5:0.5;
       if(Math.random()>chance) continue;
       a=buildAnimal(sm.biome);
       a.position.set(wx,(sm.biome==='water'?WATER_Y+0.15:sm.h),wz);
@@ -111,17 +115,25 @@ export function buildChunk(cx,cz){
       scene.add(item);pickups.push(item);pk.push(item);
     }
   }
-  for(let t=0;t<(LOW_END?2:3);t++){
-    if(Math.random()>0.55)continue;
+  // Scenery: forests are tree-dense, plains sparse, deserts get the odd cactus.
+  // More attempts per chunk, with the take-rate driven by biome so a forest
+  // reads as a proper grove rather than scattered trees.
+  const propTries=LOW_END?6:12;
+  for(let t=0;t<propTries;t++){
     const wx=ox+Math.random()*CHUNK, wz=oz+Math.random()*CHUNK;
     const sm=sample(wx,wz);
     if(World.name==='earth'){
       if(sm.biome==='water')continue;
-      // The shore band is still biome 'plains' but renders as wet sand, which
-      // is where trees were sprouting out of the beach. Keep scenery above it.
+      // The shore band is still land but renders as wet sand — keep scenery above it.
       if(sm.h<WATER_Y+1.6)continue;
+      // density per biome
+      const dens=sm.biome==='forest'?0.92:sm.biome==='desert'?0.42:sm.biome==='canyon'?0.20
+                :sm.biome==='mountain'?0.10:0.26;   // plains
+      if(Math.random()>dens)continue;
       // Nothing on the tarmac or its verges.
       if(roadDist(wx,wz)<ROAD_HW+PROP_ROAD_GAP)continue;
+    }else{
+      if(Math.random()>0.45)continue;
     }
     const prop=buildProp(sm.biome);
     prop.position.set(wx,sm.h,wz);prop.userData.baseY=sm.h;

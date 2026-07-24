@@ -31,10 +31,11 @@ export function makeNoise(seed){
   };
 }
 
-export let nElev,nHill,nMtn,nRiver,nTemp,nMoist;
+export let nElev,nHill,nMtn,nRiver,nTemp,nMoist,nCanyon;
 export function reseed(){
   const s=(Math.random()*1e6)|0;
   nElev=makeNoise(s+1); nHill=makeNoise(s+2); nMtn=makeNoise(s+3);
   nRiver=makeNoise(s+4); nTemp=makeNoise(s+5); nMoist=makeNoise(s+6);
+  nCanyon=makeNoise(s+7);
 }
 export function fbm(nz,x,z,oct){let a=1,f=1,sum=0,norm=0;for(let i=0;i<oct;i++){sum+=a*nz(x*f,z*f);norm+=a;a*=0.5;f*=2;}return sum/norm;}

@@ -94,6 +94,8 @@ export function buildProp(biome){
       const a2=part(new THREE.CylinderGeometry(0.16,0.18,0.9,8),gr,0.58,1.2,0);a2.rotation.z=-0.5;g.add(a2);
     }else if(biome==='mountain'){
       g.add(twistedRock(0x54565e));               // jagged, upthrust dark shards
+    }else if(biome==='canyon'){
+      g.add(twistedRock(0x6a4a3e));               // reddish gorge rock
     }else{
       // twisted dark-cartoon tree — solid: the ship crashes into it (slim =
       // collide with the trunk). Procedural everywhere, so the gnarled look is
