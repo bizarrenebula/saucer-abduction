@@ -17,10 +17,13 @@ export function sampleEarth(x,z){
   const hills=fbm(nHill,x*0.012,z*0.012,3);
   let h=continent*15+hills*3.2+7;
 
-  // Tall, steep mountain ranges from a broad ridged mask (much higher than before).
-  const mtnMask=fbm(nMtn,x*0.0042+30,z*0.0042-30,4);
-  const mm=Math.max(0,mtnMask-0.12);
-  h+=mm*mm*300;
+  // Tall mountain ranges. A LOW-frequency mask makes the massifs broad and
+  // sprawling (each range covers a lot of land), a gentle skirt widens the base
+  // into the surrounding hills, and a steeper term raises the summits.
+  const mtnMask=fbm(nMtn,x*0.0026+30,z*0.0026-30,4);
+  h+=Math.max(0,mtnMask-0.02)*22;      // broad shoulders — the wide footprint
+  const mm=Math.max(0,mtnMask-0.14);
+  h+=mm*mm*250;                        // steep summits on top
 
   // Broad LAKES in the lowlands — replaces the old thin river channels that
   // scattered the map with little holes. Only genuine deep dips in already-low

@@ -25,7 +25,7 @@
    Everything is cached per (axis,k,i); clearRoadCache() on reseed.
    ========================================================================= */
 import { THREE } from '../core/three.js';
-import { WATER_Y } from '../core/constants.js';
+import { WATER_Y, MTN_H } from '../core/constants.js';
 import { heightAt } from './terrain.js';
 
 export const ROAD_S    = 200;   // spacing between parallel corridors
@@ -34,14 +34,17 @@ export const ROAD_LANE = 2.3;   // lane centre offset (vehicles drive here)
 export const ROAD_LIFT = 0.30;  // deck sits this far proud of the ground
 export const STEP      = 6;     // path sample spacing along a road
 
-const MAXDEV   = 90;    // how far a road may slide sideways to dodge terrain
-const NCAND    = 45;    // candidate offsets (4u apart) -> caps the bend at ~34deg
+const MAXDEV   = 120;   // how far a road may slide sideways to dodge terrain /
+                        // find a pass between mountains (wider than before)
+const NCAND    = 61;    // candidate offsets (~4u apart) -> caps the bend at ~34deg
 const TURN     = 0.3;   // penalty on lateral movement, per unit^2
 const BLOCK    = 48;    // steps solved per dynamic-programming block
 const MARGIN   = 32;    // look-ahead/behind steps shared with neighbouring blocks
 const SMOOTH_N = 3;     // final rounding of the chosen path
-const BRIDGE_CLEAR = 4.2;   // deck height above WATER_Y on a bridge
+const BRIDGE_CLEAR = 4.2;   // deck height above WATER_Y on a water bridge
 const WATER_LOOK   = 4;     // steps either side that trigger a bridge span
+const BRIDGE_DROP  = 6;     // ground this far below the local rim -> bridge the gap
+                            // (a canyon/cliff), rather than banking over the edge
 
 export function wob(t){ return Math.sin(t*0.011)*14 + Math.sin(t*0.023+1.7)*6; }
 
@@ -68,7 +71,8 @@ function cellCost(axis,k,i,n){
   const p=shift(axis,base(axis,k,t),d);
   const h=heightAt(p.x,p.z);
   let c=0;
-  if(h>6)c+=Math.pow(h-6,1.45);        // climbing is expensive
+  if(h>6)c+=Math.pow(h-6,1.55);        // climbing is expensive
+  if(h>MTN_H)c+=5000;                  // never ride onto a mountain — thread the pass instead
   if(h<WATER_Y)c+=26+(WATER_Y-h)*1.1;  // crossing water is a last resort, not banned
   c+=d*d*0.004;                        // prefer to stay near the corridor
   cCell.set(kk,c);return c;
@@ -159,17 +163,36 @@ function edgeGround(axis,k,i,side){
   const h=heightAt(e.x,e.z);
   cEdge.set(kk,h);return h;
 }
-/* Is this span over water (and therefore a bridge)? */
+/* Does this span need a flat bridge — because it's over water, or because the
+   ground drops far below the local rim (a canyon / cliff edge)? Returns
+   'water' | 'canyon' | false. Bridging both keeps the deck level instead of
+   letting one edge hang over a drop. */
 const cWater=new Map();
-function isWater(axis,k,i){
+function isGap(axis,k,i){
   const kk=key(axis,k,i); let v=cWater.get(kk);
   if(v!==undefined)return v;
-  let w=false;
-  for(let j=-WATER_LOOK;j<=WATER_LOOK&&!w;j++){
+  let water=false;
+  for(let j=-WATER_LOOK;j<=WATER_LOOK&&!water;j++){
     const p=pathAt(axis,k,i+j);
-    if(heightAt(p.x,p.z)<WATER_Y+0.6)w=true;
+    if(heightAt(p.x,p.z)<WATER_Y+0.6)water=true;
   }
-  cWater.set(kk,w);return w;
+  let canyon=false;
+  if(!water){
+    // A true dip: ground under the deck sits well below BOTH approach ends (a
+    // canyon/gully the road crosses), as opposed to a plain slope which only
+    // dips below one side.
+    const c0=pathAt(axis,k,i), cb=pathAt(axis,k,i-WATER_LOOK), ca=pathAt(axis,k,i+WATER_LOOK);
+    const here=heightAt(c0.x,c0.z), before=heightAt(cb.x,cb.z), after=heightAt(ca.x,ca.z);
+    if(here<Math.min(before,after)-BRIDGE_DROP)canyon=true;
+  }
+  const r=water?'water':canyon?'canyon':false;
+  cWater.set(kk,r);return r;
+}
+/* Own-edge ground, smoothed a little along the road for a gradual gradient. */
+function edgeSmoothed(axis,k,i,side){
+  let sum=0,wsum=0;
+  for(let j=-3;j<=3;j++){const w=1-Math.abs(j)/4;sum+=edgeGround(axis,k,i+j,side)*w;wsum+=w;}
+  return Math.max(sum/wsum, edgeGround(axis,k,i,side));
 }
 /* Height of one deck edge: its own ground, smoothed along the road for a
    gradual gradient, then clamped so it never sinks into that ground. Bridge
@@ -177,18 +200,21 @@ function isWater(axis,k,i){
 function deckEdge(axis,k,i,side){
   const kk=key(axis,k,i)+':'+side; let v=cDeck.get(kk);
   if(v!==undefined)return v;
-  let sum=0,wsum=0;
-  for(let j=-3;j<=3;j++){
-    const w=1-Math.abs(j)/4;
-    sum+=edgeGround(axis,k,i+j,side)*w;wsum+=w;
-  }
-  let y=Math.max(sum/wsum, edgeGround(axis,k,i,side))+ROAD_LIFT;
-  if(isWater(axis,k,i)){
-    // flat deck across a bridge: both edges level, clear of the water
+  const g=edgeSmoothed(axis,k,i,side), go=edgeSmoothed(axis,k,i,-side);
+  let y=g+ROAD_LIFT;
+  const gap=isGap(axis,k,i);
+  if(gap){
+    // Flat deck across the span (a bridge): both edges level at the local rim so
+    // neither hangs over the drop. Water bridges keep a fixed clearance.
     let m=-1e9;
-    for(let j=-2;j<=2;j++)
+    for(let j=-3;j<=3;j++)
       m=Math.max(m,edgeGround(axis,k,i+j,1),edgeGround(axis,k,i+j,-1));
-    y=Math.max(WATER_Y+BRIDGE_CLEAR, m+ROAD_LIFT);
+    y=m+ROAD_LIFT;
+    if(gap==='water')y=Math.max(WATER_Y+BRIDGE_CLEAR, y);
+  }else if(Math.abs(g-go)>BRIDGE_DROP){
+    // Along a cliff/canyon rim: keep the deck LEVEL (don't bank/tilt into the
+    // drop). The low edge is then carried by a skirt or piers.
+    y=Math.max(g,go)+ROAD_LIFT;
   }
   cDeck.set(kk,y);return y;
 }
