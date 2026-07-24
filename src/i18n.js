@@ -119,7 +119,8 @@ const STRINGS = {
     'weather.snow':'Snowfall','weather.snowstorm':'Snow storm','weather.fog':'Dense fog','weather.vacuum':'Vacuum',
     'weather.meteors':'Meteor dust','weather.calm':'Still air','weather.duststorm':'Dust storm',
     // --- buffs ---
-    'buff.speed':'OVERDRIVE — engines ×1.6','buff.lock':'HUNGER — lock ×2','buff.wide':'WIDE MAW — beam ×1.6',
+    'buff.speed':'SPEED OF FRIGHT — engines ×1.6','buff.lock':'SNATCH & GRAB — lock ×2','buff.wide':'WIDE LOAD — beam ×1.6',
+    'crop.done':'CROP CIRCLE','crop.banner':'🌾 LITTLE GREEN THUMB  +{n}',
     // --- ship upgrades (perk 3) ---
     'upg.eyebrow':'✦ Ship Upgrade ✦',
     'upg.hud.label':'Ship','upg.hud.max':'Fully upgraded',
@@ -289,6 +290,7 @@ const STRINGS = {
     'weather.snow':'Снегопад','weather.snowstorm':'Снежная буря','weather.fog':'Густой туман','weather.vacuum':'Вакуум',
     'weather.meteors':'Метеорная пыль','weather.calm':'Штиль','weather.duststorm':'Пыльная буря',
     'buff.speed':'ФОРСАЖ — двигатели ×1.6','buff.lock':'ГОЛОД — захват ×2','buff.wide':'ШИРОКАЯ ПАСТЬ — луч ×1.6',
+    'crop.done':'КРУГ НА ПОЛЕ','crop.banner':'🌾 ЗЕЛЁНАЯ РУКА  +{n}',
     // --- ship upgrades (perk 3) ---
     'upg.eyebrow':'✦ Улучшение корабля ✦',
     'upg.hud.label':'Корабль','upg.hud.max':'Полностью улучшен',
@@ -451,6 +453,7 @@ const STRINGS = {
     'weather.snow':'Снеговалеж','weather.snowstorm':'Снежна буря','weather.fog':'Гъста мъгла','weather.vacuum':'Вакуум',
     'weather.meteors':'Метеорен прах','weather.calm':'Затишие','weather.duststorm':'Прахова буря',
     'buff.speed':'ФОРСАЖ — двигатели ×1.6','buff.lock':'ГЛАД — прихващане ×2','buff.wide':'ШИРОКА ПАСТ — лъч ×1.6',
+    'crop.done':'КРЪГ В ЖИТОТО','crop.banner':'🌾 ЗЕЛЕНА РЪКА  +{n}',
     // --- ship upgrades (perk 3) ---
     'upg.eyebrow':'✦ Ъпгрейд на кораба ✦',
     'upg.hud.label':'Кораб','upg.hud.max':'Напълно надграден',

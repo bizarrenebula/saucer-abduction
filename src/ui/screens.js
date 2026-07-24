@@ -16,6 +16,7 @@ import { Special } from '../systems/special.js';
 import { resetBuffs } from '../systems/buffs.js';
 import { Upgrades } from '../systems/upgrades.js';
 import { spawnUpgradeItems, clearUpgradeItems } from '../entities/upgradeItems.js';
+import { CropCircles } from '../systems/cropcircles.js';
 import { updateMissionHUD } from '../systems/missions.js';
 import { resetMeteors } from '../hazards/meteors.js';
 import { resetGeysers } from '../hazards/geysers.js';
@@ -77,6 +78,7 @@ export function startGame(opts){
   // start grounded. Then scatter whichever field parts aren't installed yet.
   if(keepUpgrades)Upgrades.restore(); else Upgrades.reset();
   spawnUpgradeItems();
+  CropCircles.reset();
   updateMissionHUD();
   Story.reset();
   if(S.storyMode)Story.begin(S.world);

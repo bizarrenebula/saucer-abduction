@@ -34,6 +34,7 @@ import { applyCloakVisual } from './systems/cloak.js';
 import { updateCollision } from './systems/collision.js';
 import { Special } from './systems/special.js';
 import { Upgrades } from './systems/upgrades.js';
+import { CropCircles } from './systems/cropcircles.js';
 
 import { updateMeteors } from './hazards/meteors.js';
 import { updateGeysers } from './hazards/geysers.js';
@@ -265,6 +266,7 @@ function animate(){
     updateLightning(dt);
     updateVehicles(dt,beamOn&&bp>0.5);
     updateUpgradeItems(dt);     // findable ship-part pickups (thrusters / engine / ring)
+    CropCircles.update(dt,beamOn&&bp>0.5);   // "Little Green Thumb" — scorch a crop circle
     updateCollision();          // trees / barns / stations are solid — may flip state to 'crashing'
     Story.update(dt,beamOn&&bp>0.5);
 
