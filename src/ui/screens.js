@@ -210,7 +210,7 @@ document.getElementById('segMode').addEventListener('click',e=>{
   const b=e.target.closest('[data-m]');if(!b)return;
   S.storyMode=(b.dataset.m==='story');
   document.querySelectorAll('#segMode [data-m]').forEach(x=>x.classList.toggle('on',x===b));
-  document.getElementById('oMode').textContent=t(S.storyMode?'mode.story':'mode.explore');
+  document.getElementById('oMode').textContent=t(S.storyMode?'mode.story':'mode.exploreShort');
 });
 document.getElementById('stBtn').addEventListener('click',storyProceed);
 
@@ -300,7 +300,7 @@ onLang(()=>{
   // re-render dynamic menu bits that aren't plain [data-i18n] elements
   syncLabels();
   document.getElementById('oWorld').textContent=t('world.'+S.world);
-  document.getElementById('oMode').textContent=t(S.storyMode?'mode.story':'mode.explore');
+  document.getElementById('oMode').textContent=t(S.storyMode?'mode.story':'mode.exploreShort');
   document.getElementById('oEnergy').textContent=t(S.energyMode==='drain'?'reactor.drain':'reactor.inf');
   if(oGraphics)oGraphics.textContent=t(S.gfx==='full'?'gfx.cinematic':'gfx.basic');
   if(oMusicSrc)oMusicSrc.textContent=t(S.musicMode==='procedural'?'music.procedural':'music.soundtrack');

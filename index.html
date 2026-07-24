@@ -402,8 +402,11 @@
   .setup .saucer-tag{font-size:9px;letter-spacing:.42em;text-transform:uppercase;
     color:var(--beam-dim);margin-bottom:2px}
 
-  #saucerMenu{position:relative;width:min(86vw,380px);aspect-ratio:1;margin:20px auto 12px;
-    touch-action:none;-webkit-user-select:none;user-select:none}
+  /* Explicit square height (not just aspect-ratio): iOS Safari mis-sizes
+     aspect-ratio boxes that also carry percentage padding, which stretched the
+     PLAY core into a tall ellipse. A definite height keeps every % child square. */
+  #saucerMenu{position:relative;width:min(86vw,380px);height:min(86vw,380px);aspect-ratio:1;
+    margin:20px auto 12px;touch-action:none;-webkit-user-select:none;user-select:none}
   /* the disc: a domed metallic saucer seen from above — soft dome specular,
      concentric hull panels, four sector dividers, and a gentle outer halo. */
   .saucer-rim{position:absolute;inset:0;border-radius:50%;
@@ -436,13 +439,13 @@
   #saucerHi.on{opacity:1}
 
   .sector{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:30%;pointer-events:none;text-align:center;z-index:2;transition:.18s}
+    width:32%;pointer-events:none;text-align:center;z-index:2;transition:.18s}
   .sector[data-sector=world]{top:13%;left:50%}
-  .sector[data-sector=mode]{left:84%;top:50%}
+  .sector[data-sector=mode]{left:85%;top:50%}
   .sector[data-sector=howto]{top:87%;left:50%}
-  .sector[data-sector=extra]{left:16%;top:50%}
+  .sector[data-sector=extra]{left:15%;top:50%}
   .sector .s-name{display:block;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft)}
-  .sector .s-val{display:block;font-size:12px;font-weight:700;color:var(--ink);margin-top:2px}
+  .sector .s-val{display:block;font-size:12px;font-weight:700;color:var(--ink);margin-top:2px;white-space:nowrap}
   .sector.hot{transform:translate(-50%,-50%) scale(1.08)}
   .sector.hot .s-name{color:var(--beam)}
   .sector.hot .s-val{color:var(--beam);text-shadow:0 0 12px rgba(143,232,184,.6)}
@@ -455,13 +458,15 @@
   /* core: a recessed hub cradling the PLAY button, with a clear margin of bezel
      around the button so it reads as seated, not filling the whole hub. */
   #saucerCore{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:47%;aspect-ratio:1;border-radius:50%;z-index:4;box-sizing:border-box;
+    width:47%;height:47%;border-radius:50%;z-index:4;box-sizing:border-box;
     padding:13%;display:flex;align-items:center;justify-content:center;
     background:radial-gradient(circle at 50% 36%,#173a2b,#0a1c15 76%);
     border:1px solid rgba(143,232,184,.14);
     box-shadow:inset 0 0 26px rgba(0,0,0,.6),inset 0 0 0 1px rgba(143,232,184,.05),
       0 0 30px rgba(0,0,0,.4);transition:opacity .2s}
-  #saucerCore .play{width:100%;height:100%;margin:0;border-radius:50%;font-size:15px;letter-spacing:.22em;
+  #saucerCore .play{width:100%;height:100%;margin:0;padding:0;box-sizing:border-box;
+    display:flex;align-items:center;justify-content:center;
+    border-radius:50%;font-size:15px;letter-spacing:.22em;
     box-shadow:0 0 24px rgba(89,255,176,.4),inset 0 0 0 1px rgba(255,255,255,.12)}
   #saucerMenu.editing #saucerCore{opacity:0;pointer-events:none}
   #saucerMenu:not(.editing) #saucerCore.ready .play:not(:disabled){animation:corePulse 1.6s infinite}
@@ -496,7 +501,7 @@
 
   @media (max-height:760px), (max-width:430px){
     .setup h1{font-size:22px}
-    #saucerMenu{width:min(80vw,310px)}
+    #saucerMenu{width:min(80vw,310px);height:min(80vw,310px)}
     #saucerCore .play{font-size:13px}
     #saucerPanel{max-height:min(80vw,310px)}
   }
@@ -535,7 +540,7 @@
   <div class="panel" id="zoomCtl"><span class="lbl" data-i18n="hud.zoom">Zoom</span>
     <input type="range" id="zoomSlider" min="0.5" max="2.5" step="0.05" value="1" aria-label="Zoom"></div>
   <div class="panel" id="angleCtl"><span class="lbl" data-i18n="hud.angle">Angle</span>
-    <input type="range" id="angleSlider" min="0" max="1" step="0.02" value="0" aria-label="Camera angle"></div>
+    <input type="range" id="angleSlider" min="0" max="1" step="0.02" value="0.35" aria-label="Camera angle"></div>
   <div id="cloakRing" aria-hidden="true">
     <svg viewBox="0 0 44 44"><circle class="bg" cx="22" cy="22" r="19"/><circle class="fg" cx="22" cy="22" r="19"/></svg>
     <div class="cap" data-i18n="hud.cloaking">CLOAK</div>
@@ -591,7 +596,7 @@
       <div class="saucer-rim"></div>
       <div id="saucerHi"></div>
       <div class="sector" data-sector="world"><span class="s-name" data-i18n="field.world">World</span><span class="s-val" id="oWorld">Earth</span></div>
-      <div class="sector" data-sector="mode"><span class="s-name" data-i18n="field.mode">Mode</span><span class="s-val" id="oMode">Exploration</span></div>
+      <div class="sector" data-sector="mode"><span class="s-name" data-i18n="field.mode">Mode</span><span class="s-val" id="oMode">Explore</span></div>
       <div class="sector" data-sector="howto"><span class="s-name" data-i18n="field.howto">How to play</span><span class="s-val" data-i18n="ctrl.title">controls</span></div>
       <div class="sector" data-sector="extra"><span class="s-name" data-i18n="field.tuning">Tuning</span><span class="s-val" id="oExtra">3 min</span></div>
       <div id="saucerHit"></div>

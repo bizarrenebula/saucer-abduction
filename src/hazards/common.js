@@ -8,8 +8,8 @@ import { World } from '../world/world-config.js';
 
 export const HAZARD_DIFFICULTY={earth:1, moon:1.5, mars:2};
 export function hazMult(){return (HAZARD_DIFFICULTY[World.name]||1)*(S.storyMode?2:1);}   // story mode still doubles on top
-export function hazCount(){                                   // base 3–4, scaled and floored
+export function hazCount(){                                   // base 2–3, scaled and floored
   const m=hazMult();
-  const base=3+((Math.random()*2)|0);
-  return Math.max(3,Math.round(base*m));
+  const base=2+((Math.random()*2)|0);
+  return Math.max(2,Math.round(base*m));
 }

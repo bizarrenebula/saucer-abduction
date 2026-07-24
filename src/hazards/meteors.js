@@ -112,7 +112,7 @@ export function clearMeteors(){
   for(let i=meteors.length-1;i>=0;i--){if(meteors[i].userData.trail)scene.remove(meteors[i].userData.trail);scene.remove(meteors[i]);meteors.splice(i,1);}
   for(let i=impacts.length-1;i>=0;i--){scene.remove(impacts[i]);impacts.splice(i,1);}
 }
-export function resetMeteors(){clearMeteors();meteorTimer=6;meteorWarn=0;}
+export function resetMeteors(){clearMeteors();meteorTimer=30;meteorWarn=0;}
 function triggerShower(){
   meteorWarn=1.6;                                  // short telegraph before rocks fall
   banner(t('banner.meteors'));
@@ -129,7 +129,7 @@ export function updateMeteors(dt){
   if(S.dayF<0.5){
     meteorTimer-=dt;
     if(meteorTimer<=0){
-      meteorTimer=(22+Math.random()*18)/hazMult();   // more frequent on harder worlds / story
+      meteorTimer=(46+Math.random()*30)/hazMult();   // more frequent on harder worlds / story
       triggerShower();
     }
   }

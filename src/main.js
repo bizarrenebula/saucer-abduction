@@ -350,13 +350,24 @@ function animate(){
     // Chase camera rides behind the nose: rotate the offset by the heading so the
     // view swings with the ship and "forward" stays into the screen. input.zoom
     // is the zoom-slider multiplier layered on top of the altitude zoom.
-    // Angle slider: blend the chase offset from the behind-the-ship framing
-    // (camOffset) toward a top-down one as camPitch → 1. Eased so a drag glides.
+    // Angle slider: piecewise blend through three framings as camPitch runs
+    // 0→1 — a low, near-side view that looks slightly UP at the saucer (bottom),
+    // the default behind-the-ship framing (BEHIND_T), and a top-down view (top).
+    // Eased so a drag glides.
     camPitchE=lerp(camPitchE,input.camPitch,Math.min(1,dt*3));
-    const p=camPitchE;
-    const offY=lerp(camOffset.y,46,p);      // rise overhead
-    const offZ=lerp(camOffset.z,6,p);       // and pull in almost directly above
-    const lookY=lerp(camLook.y,0,p);        // aim down onto the ship
+    const p=camPitchE, BEHIND_T=0.35;
+    let offY,offZ,lookY;
+    if(p<BEHIND_T){                          // low/side  →  behind
+      const u=p/BEHIND_T;
+      offY=lerp(-4,camOffset.y,u);           // camera dips just below the hull…
+      offZ=lerp(45,camOffset.z,u);
+      lookY=lerp(5,camLook.y,u);             // …and looks slightly up at it (side-on)
+    }else{                                   // behind    →  top-down
+      const u=(p-BEHIND_T)/(1-BEHIND_T);
+      offY=lerp(camOffset.y,46,u);           // rise overhead
+      offZ=lerp(camOffset.z,6,u);            // and pull in almost directly above
+      lookY=lerp(camLook.y,0,u);             // aim down onto the ship
+    }
     const z=camZoom*input.zoom;
     const cs=Math.sin(S.yaw), cc=Math.cos(S.yaw);
     const ox=(camOffset.x*cc+offZ*cs)*z;

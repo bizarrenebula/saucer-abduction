@@ -72,7 +72,7 @@ function spawnStrike(bullseye){
   strikes.push({grp,marker,bolt:null,x,z,gy,t:0,phase:'warn',warnDur:1.1});
 }
 export function clearStrikes(){for(let i=strikes.length-1;i>=0;i--){scene.remove(strikes[i].grp);strikes.splice(i,1);}flashAmt=0;}
-export function resetLightning(){clearStrikes();lightningTimer=6;}
+export function resetLightning(){clearStrikes();lightningTimer=22;}
 export function updateLightning(dt){
   if(World.name!=='earth'){if(strikes.length)clearStrikes();return;}
   // only storms bring lightning
@@ -80,7 +80,7 @@ export function updateLightning(dt){
   if(storming){
     lightningTimer-=dt;
     if(lightningTimer<=0){
-      lightningTimer=(16+Math.random()*14)/hazMult();
+      lightningTimer=(38+Math.random()*26)/hazMult();
       banner(tr('banner.lightning'));
       sfxThunderWarn();
       const n=hazCount();

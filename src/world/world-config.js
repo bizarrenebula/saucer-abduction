@@ -47,9 +47,12 @@ export function applyDayNightLight(){
   // FOG = the sky's horizon colour (wc.fog matches sky[2]) so distant terrain
   // dissolves seamlessly into the sky — no hard chunk edge, a soft fog-of-war
   // reveal as you move. Only a slight lift by day. Density eases with the light.
+  // Deep, near-black fog so the unrevealed distance reads as darkness the ship
+  // gently uncovers — not a lit grey haze that washes the whole scene out. The
+  // world tint is kept faint and only barely lifted by day.
   if(wc){
     const nf=wc.fog;const nr=(nf>>16)&255,ng=(nf>>8)&255,nb=nf&255;
-    scene.fog.color.setRGB((nr+f*24)/255,(ng+f*28)/255,(nb+f*32)/255);
+    scene.fog.color.setRGB((nr*0.42+f*6)/255,(ng*0.42+f*7)/255,(nb*0.42+f*8)/255);
   }
   scene.fog.density=lerp(env.LOW_END?0.0140:0.0075, env.LOW_END?0.0110:0.0056, f);
   // stars fade out by day, moon fades in by night

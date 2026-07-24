@@ -84,7 +84,7 @@ function spawnGeyser(nearShip){
   sfxGeyserWarn();
 }
 export function clearGeysers(){for(let i=geysers.length-1;i>=0;i--){scene.remove(geysers[i].grp);geysers.splice(i,1);}}
-export function resetGeysers(){clearGeysers();geyserTimer=7;}
+export function resetGeysers(){clearGeysers();geyserTimer=32;}
 export function updateGeysers(dt){
   if(World.name!=='mars'){if(geysers.length)clearGeysers();return;}
   // geysers only erupt during daytime — night is a safe window to work the herd.
@@ -92,7 +92,7 @@ export function updateGeysers(dt){
   if(S.dayF>=0.5){
     geyserTimer-=dt;
     if(geyserTimer<=0){
-      geyserTimer=(18+Math.random()*18)/hazMult();
+      geyserTimer=(40+Math.random()*30)/hazMult();
       banner(tr('banner.geysers'));
       beep(300,0.16,0.08);setTimeout(()=>beep(300,0.16,0.08),240);
       const n=hazCount();

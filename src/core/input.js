@@ -32,7 +32,7 @@ export const input={
   tFwd:0, tStrafe:0, tTurn:0, tClimb:0,   // touch joystick axes, each -1..1
   beamHold:false, spHeld:false,
   zoom:1,                                  // camera-zoom multiplier, driven by the slider
-  camPitch:0,                              // 0 = behind-the-ship view, 1 = top-down; the angle slider
+  camPitch:0.35,                           // 0 = low/side, ~0.35 = behind, 1 = top-down; the angle slider
   cloakProg:0,                             // 0..1 progress of the hold-the-ship-to-cloak timer
 };
 
