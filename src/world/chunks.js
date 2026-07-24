@@ -10,7 +10,7 @@ import { scene } from '../core/engine.js';
 import { World } from './world-config.js';
 import { sample } from './terrain.js';
 import { TEX, grassTex, sandTex, rockTex, snowTex } from './textures.js';
-import { ROAD_HW, STEP, roadsNear, roadSample, buildRoadMesh, clearRoadCache, roadTex, roadDist } from './roads.js';
+import { ROAD_HW, STEP, roadsNear, roadSample, buildRoadMesh, clearRoadCache, roadTex, roadDist, junctionsIn } from './roads.js';
 import { animals, pickups, props, buildings, vehicles, shelters } from '../entities/registry.js';
 import { buildAnimal } from '../entities/animals.js';
 import { buildAlien } from '../entities/aliens.js';
@@ -50,6 +50,11 @@ const roadMat=new THREE.MeshStandardMaterial({map:roadTex,roughness:0.93,metalne
 roadMat.color.setScalar(1.85);
 const pierMat=new THREE.MeshStandardMaterial({color:0x53565c,roughness:0.95});
 pierMat.color.multiplyScalar(1.5);
+/* Crossroad pad — a plain asphalt square laid over the messy overlap where two
+   roads meet, so the intersection reads as one clean junction. */
+const junctionMat=new THREE.MeshStandardMaterial({color:0x5b5f66,roughness:0.93,metalness:0.02});
+junctionMat.color.multiplyScalar(1.85);
+const JUNC=2.7*ROAD_HW;
 
 export function buildChunk(cx,cz){
   const geo=new THREE.PlaneGeometry(CHUNK,CHUNK,SEG,SEG);
@@ -265,6 +270,13 @@ export function buildChunk(cx,cz){
         placeVehicle(v,c.axis,c.k,t,Math.random()<0.5?1:-1);
         scene.add(v);vh.push(v);
       }
+    }
+    // clean crossroad pads where corridors intersect within this chunk
+    for(const j of junctionsIn(ox,oz,CHUNK)){
+      const g=new THREE.PlaneGeometry(JUNC,JUNC);g.rotateX(-Math.PI/2);
+      const pad=new THREE.Mesh(g,junctionMat);
+      pad.position.set(j.x,j.y+0.10,j.z);pad.rotation.y=j.ang;pad.receiveShadow=true;
+      scene.add(pad);rd.push(pad);
     }
   }
   chunks.set(chunkKey(cx,cz),{mesh,animals:spawned,pickups:pk,props:pr,builds:bl,shel:sh,vehs:vh,roads:rd});

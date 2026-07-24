@@ -308,6 +308,29 @@ export function roadHeightAt(x,z){
    Used to keep scenery off the tarmac and its verges. */
 export function roadDist(x,z){ return nearestRoad(x,z).d; }
 
+/* ---------- crossroads ----------
+   The network is a grid, so an X-corridor (k=kz) and a Z-corridor (k=kx) meet
+   near each grid point (kx,kz). Because both are routed sideways to dodge
+   terrain, the actual crossing is offset from the grid point, so we scan the
+   X-road near t=kx and find where it comes closest to the Z-road (same z), and
+   report that as the junction centre + the road heading there. One entry per
+   grid point inside the chunk, so junctions aren't rendered twice. */
+export function junctionsIn(ox,oz,size){
+  const out=[];
+  const kx0=Math.ceil(ox/ROAD_S)*ROAD_S, kz0=Math.ceil(oz/ROAD_S)*ROAD_S;
+  for(let kx=kx0;kx<ox+size;kx+=ROAD_S)for(let kz=kz0;kz<oz+size;kz+=ROAD_S){
+    let best=Infinity,bx=0,bz=0,by=0,ang=0;
+    for(let t=kx-90;t<=kx+90;t+=STEP){
+      const a=roadSample('x',kz,t);        // X-road point
+      const b=roadSample('z',kx,a.z);      // Z-road point at the same z
+      const d=Math.abs(a.x-b.x);
+      if(d<best){best=d;bx=(a.x+b.x)*0.5;bz=a.z;by=Math.max(a.y,b.y);ang=Math.atan2(a.fx,a.fz);}
+    }
+    if(best<ROAD_HW*1.7)out.push({x:bx,y:by,z:bz,ang});   // they really meet -> a junction
+  }
+  return out;
+}
+
 /* ---------- which corridors touch a chunk ---------- */
 export function roadsNear(ox,oz,size){
   const out=[], pad=MAXDEV+22;
