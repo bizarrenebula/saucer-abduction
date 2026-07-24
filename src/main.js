@@ -225,8 +225,13 @@ function animate(){
     disc.scale.setScalar(eR*(0.55+0.45*bp));
     beamLight.position.set(saucer.position.x,saucer.position.y-4,saucer.position.z);
     beamLight.intensity=(1.5+0.3*Math.sin(t*13.7)+0.2*Math.sin(t*29.3))*bp;
-    shipLight.position.set(saucer.position.x,saucer.position.y+1.5,saucer.position.z);
-    shipLight.intensity=(0.55+0.9*(1-S.dayF))+0.12*Math.sin(t*3.1);   // glows more at night
+    // Running light: a soft pool that lights the ground around the ship. Much
+    // stronger and wider-reaching at night, so the area below is readable rather
+    // than pitch black. Sits a little below the hull so it spills onto the terrain.
+    shipLight.position.set(saucer.position.x,saucer.position.y-1.0,saucer.position.z);
+    const _night=1-S.dayF;
+    shipLight.intensity=(0.5+2.7*_night)+0.14*Math.sin(t*3.1);
+    shipLight.distance=lerp(70,140,_night);
     const lg=saucer.userData.lights;
     if(lg&&lg.visible!==false){
       const blink=S.dayF>0.6?1:(0.3+0.7*(0.5+0.5*Math.sin(t*6.5)));
