@@ -4,35 +4,40 @@
    humans and wormlings to their own updaters.
    ========================================================================= */
 import { THREE } from '../core/three.js';
-import { OBJ_SCALE, WATER_Y } from '../core/constants.js';
+import { OBJ_SCALE, WATER_Y, MTN_H } from '../core/constants.js';
 import { lerp, wrapAngle, turnToward } from '../core/math.js';
 import { mat, part } from '../core/mesh.js';
 import { S } from '../core/state.js';
-import { heightAt } from '../world/terrain.js';
+import { heightAt, sample } from '../world/terrain.js';
+import { roadDist, ROAD_HW } from '../world/roads.js';
 import { LOADED, spawnModel } from '../assets.js';
 import { animals } from './registry.js';
+import { saucer } from '../systems/saucer.js';
+import { effBeamR } from '../systems/beam.js';
 import { updateHuman } from './humans.js';
 import { updateWorm } from './aliens.js';
 
 /* turn = yaw speed in rad/s while pivoting in place. Heavier animals swing
    round slowly, which is most of what sells the weight difference. */
+/* Species table (keyed by name). class: 'land' grazers, 'water' ducks, 'air'
+   birds. Birds fly over anything and are quicker than sheep. */
 export const ANIMALS={
-  desert :{name:'Camel', pts:3, size:1.3,  turn:1.5},
-  plains :{name:'Sheep', pts:1, size:1.1,  turn:2.6},
-  mountain:{name:'Goat', pts:4, size:0.95, turn:3.4},
-  water  :{name:'Duck',  pts:2, size:0.7,  turn:2.2}
+  Sheep:{pts:1, size:1.1,  turn:2.6, cls:'land'},
+  Horse:{pts:3, size:1.5,  turn:2.0, cls:'land', hopDist:4, hopRng:3, hopDur:0.5},
+  Goat :{pts:4, size:0.95, turn:3.4, cls:'land'},
+  Duck :{pts:2, size:0.7,  turn:2.2, cls:'water'},
+  Bird :{pts:2, size:0.5,  turn:3.2, cls:'air', hover:11, hopDist:7, hopRng:5, hopDur:0.42, restMin:0.7, restRng:1.5},
 };
-export function buildAnimal(biome){
-  // Forests share the plains fauna (sheep), canyons the desert fauna (camel);
-  // anything unmapped falls back to plains — so a new terrain biome never crashes.
-  if(!ANIMALS[biome]) biome = (biome==='canyon') ? 'desert' : 'plains';
-  const info=ANIMALS[biome];const s=info.size*OBJ_SCALE;
-  // --- custom model path ---
-  const modelName=(biome==='plains')?'sheep':(biome==='water')?'duck':(biome==='desert')?'camel':(biome==='mountain')?'goat':null;
+export function buildAnimal(species){
+  const info=ANIMALS[species]||ANIMALS.Sheep;
+  if(!ANIMALS[species])species='Sheep';
+  const s=info.size*OBJ_SCALE;
+  // --- custom model path (only sheep/duck/goat ever had GLBs; skipped in pure-JS) ---
+  const modelName={Sheep:'sheep',Duck:'duck',Goat:'goat'}[species]||null;
   if(modelName&&LOADED[modelName]){
     const g=spawnModel(modelName);
     g.scale.setScalar(s);
-    g.userData.legY=0;g.userData.biome=biome;g.userData.name=info.name;
+    g.userData.legY=0;g.userData.biome=info.cls;g.userData.name=species;
     g.userData.hopTimer=1+Math.random()*2.5;
     g.userData.hop=null;g.userData.progress=0;g.userData.abducting=0;g.userData.face=Math.random()*6.28;
     g.userData.pts=info.pts;g.userData.baseS=s;
@@ -43,7 +48,7 @@ export function buildAnimal(biome){
   const eyeM=new THREE.MeshBasicMaterial({color:0xd8efe0});
   const eyes=(x,y,z,r)=>{g.add(part(new THREE.SphereGeometry(r,6,6),eyeM,-x,y,z));
     g.add(part(new THREE.SphereGeometry(r,6,6),eyeM,x,y,z));};
-  if(biome==='water'){
+  if(species==='Duck'){
     const bodyM=mat(0x5b4a33,0.7);
     const b=part(new THREE.SphereGeometry(1,16,12),bodyM,0,0.7,0);b.scale.set(1.35,0.85,1.05);g.add(b);
     const tail=part(new THREE.ConeGeometry(0.35,0.7,10),bodyM,0,0.85,-1.15);tail.rotation.x=-1.4;g.add(tail);
@@ -51,7 +56,7 @@ export function buildAnimal(biome){
     g.add(part(new THREE.SphereGeometry(0.5,16,12),mat(0x1c5a3c,0.35),0,1.5,0.85));
     eyes(0.2,1.6,1.2,0.07);
     const bill=part(new THREE.ConeGeometry(0.2,0.55,10),mat(0xe8a13a,0.5),0,1.5,1.35);bill.rotation.x=Math.PI/2;g.add(bill);
-  }else if(biome==='plains'){
+  }else if(species==='Sheep'){
     // sheep: woolly pale body, dark slim legs and head
     const wool=mat(0xd8d4c6,0.98), dark=mat(0x26221e,0.9);
     const b=part(new THREE.SphereGeometry(1,16,12),wool,0,1.15,0);b.scale.set(1.4,1.0,0.95);g.add(b);
@@ -63,23 +68,37 @@ export function buildAnimal(biome){
     const e2=part(new THREE.SphereGeometry(0.14,8,6),dark,0.35,1.55,1.3);e2.scale.set(1,0.5,0.7);g.add(e2);
     [[-0.55,0.75],[0.55,0.75],[-0.55,-0.7],[0.55,-0.7]].forEach(p=>g.add(part(new THREE.CylinderGeometry(0.11,0.09,1.0,8),dark,p[0],0.5,p[1])));
     eyes(0.16,1.45,1.68,0.07);
-  }else if(biome==='desert'){
-    // camel: chunky rounded forms — reads cleanly even at reduced segments
-    const hide=mat(0xb99a62,0.9);
-    const b=part(new THREE.SphereGeometry(1,16,12),hide,0,1.7,0);b.scale.set(1.5,0.9,0.82);g.add(b);
-    // two humps as fuller spheres, nestled together
-    const hp1=part(new THREE.SphereGeometry(0.6,12,10),hide,0,2.35,0.3);hp1.scale.set(0.9,1.0,0.9);g.add(hp1);
-    const hp2=part(new THREE.SphereGeometry(0.56,12,10),hide,0,2.3,-0.55);hp2.scale.set(0.9,1.0,0.9);g.add(hp2);
-    // neck as a tapered chunky form + rounded head
-    const neck=part(new THREE.CylinderGeometry(0.28,0.36,1.4,10),hide,0,2.3,1.05);neck.rotation.x=0.5;g.add(neck);
-    const head=part(new THREE.SphereGeometry(0.42,12,10),hide,0,2.95,1.5);head.scale.set(0.9,0.85,1.25);g.add(head);
-    const snout=part(new THREE.SphereGeometry(0.24,10,8),hide,0,2.82,1.9);snout.scale.set(0.8,0.7,1.1);g.add(snout);
-    // sturdier tapered legs (thicker, so they don't look like sticks when simplified)
-    [[-0.5,0.7],[0.5,0.7],[-0.5,-0.6],[0.5,-0.6]].forEach(p=>{
-      const leg=part(new THREE.CylinderGeometry(0.16,0.13,1.75,8),hide,p[0],0.88,p[1]);g.add(leg);
-      g.add(part(new THREE.SphereGeometry(0.15,8,7),hide,p[0],0.05,p[1]));   // rounded hoof
+  }else if(species==='Horse'){
+    // horse: long body, arched neck, mane + tail, tall legs. Coat randomized.
+    const COAT=[0xe8e2d4,0x6e4a2c,0x8a5836,0x2b2622,0x9a968c,0x46331f];   // white/brown/chestnut/black/grey/bay
+    const coat=mat(COAT[(Math.random()*COAT.length)|0],0.82);
+    const dark=mat(0x1a1610,0.75);
+    const b=part(new THREE.SphereGeometry(1,16,12),coat,0,1.75,0);b.scale.set(1.75,0.95,0.78);g.add(b);
+    const chest=part(new THREE.SphereGeometry(0.72,14,10),coat,0,1.7,0.95);chest.scale.set(0.9,1.05,0.9);g.add(chest);
+    const rump=part(new THREE.SphereGeometry(0.72,14,10),coat,0,1.75,-0.95);rump.scale.set(0.95,1.0,0.9);g.add(rump);
+    const neck=part(new THREE.CylinderGeometry(0.30,0.52,1.5,10),coat,0,2.45,1.35);neck.rotation.x=-0.75;g.add(neck);
+    const head=part(new THREE.BoxGeometry(0.46,0.55,1.05),coat,0,3.1,1.95);head.rotation.x=-0.28;g.add(head);
+    const muz=part(new THREE.BoxGeometry(0.34,0.4,0.5),coat,0,2.92,2.5);muz.rotation.x=-0.28;g.add(muz);
+    g.add(part(new THREE.ConeGeometry(0.1,0.32,6),coat,-0.16,3.42,1.72));   // ears
+    g.add(part(new THREE.ConeGeometry(0.1,0.32,6),coat,0.16,3.42,1.72));
+    const mane=part(new THREE.BoxGeometry(0.09,0.52,1.35),dark,0,2.62,1.32);mane.rotation.x=-0.75;g.add(mane);
+    const tail=part(new THREE.ConeGeometry(0.18,1.2,8),dark,0,1.85,-1.5);tail.rotation.x=0.7;g.add(tail);
+    [[-0.5,0.92],[0.5,0.92],[-0.5,-0.78],[0.5,-0.78]].forEach(p=>{
+      g.add(part(new THREE.CylinderGeometry(0.13,0.10,1.6,8),coat,p[0],0.8,p[1]));
+      g.add(part(new THREE.CylinderGeometry(0.13,0.14,0.18,8),dark,p[0],0.06,p[1]));   // hoof
     });
-    eyes(0.19,3.02,1.72,0.08);
+    eyes(0.22,3.12,2.02,0.07);
+  }else if(species==='Bird'){
+    // bird: small body, swept wings that flap, bright beak. Colour randomized.
+    const fe=mat([0x2c3a4a,0x3a2a2a,0x46464e,0x244034][(Math.random()*4)|0],0.7);
+    const body=part(new THREE.SphereGeometry(0.5,12,10),fe,0,0,0);body.scale.set(0.8,0.72,1.35);g.add(body);
+    const head=part(new THREE.SphereGeometry(0.3,10,8),fe,0,0.24,0.6);g.add(head);
+    const beak=part(new THREE.ConeGeometry(0.1,0.36,7),mat(0xe0a030,0.5),0,0.2,0.98);beak.rotation.x=Math.PI/2;g.add(beak);
+    const wl=part(new THREE.BoxGeometry(1.15,0.06,0.5),fe,-0.72,0.06,0);wl.rotation.z=0.18;g.add(wl);
+    const wr=part(new THREE.BoxGeometry(1.15,0.06,0.5),fe,0.72,0.06,0);wr.rotation.z=-0.18;g.add(wr);
+    g.add(part(new THREE.BoxGeometry(0.4,0.05,0.65),fe,0,0,-0.75));   // tail
+    g.userData.wings=[wl,wr];
+    eyes(0.14,0.3,0.78,0.05);
   }else{
     // mountain goat: compact, sturdy — chunky legs, bolder horns, clear beard
     const hide=mat(0xbdb6a8,0.95), horn=mat(0x4a4238,0.6);
@@ -102,11 +121,15 @@ export function buildAnimal(biome){
   }
   g.userData.legY=0;
   g.scale.setScalar(s);
-  g.userData.biome=biome;g.userData.name=info.name;
+  g.userData.biome=info.cls;g.userData.name=species;
   g.userData.hopTimer=1+Math.random()*2.5;
   g.userData.hop=null; g.userData.progress=0; g.userData.abducting=0; g.userData.face=Math.random()*6.28;
   g.userData.pts=info.pts; g.userData.baseS=s;
   g.userData.phase='idle'; g.userData.turnRate=info.turn; g.rotation.y=g.userData.face;
+  // movement flavour
+  g.userData.fly=info.cls==='air'; g.userData.hover=info.hover||0;
+  g.userData.hopDist=info.hopDist; g.userData.hopRng=info.hopRng; g.userData.hopDur=info.hopDur;
+  g.userData.restMin=info.restMin; g.userData.restRng=info.restRng;
   return g;
 }
 
@@ -121,16 +144,42 @@ export function buildAnimal(biome){
 */
 const TURN_EPS=0.02;      // radians: close enough to "facing that way"
 
+function flap(u){
+  if(!u.wings)return;
+  const f=Math.sin(performance.now()*0.02+u.face)*0.55;
+  u.wings[0].rotation.z=0.18+f; u.wings[1].rotation.z=-0.18-f;
+}
+// Which ground level does this creature ride at (birds fly above the surface,
+// ducks float on the water, grazers stand on the land)?
+function rideY(u,x,z){
+  if(u.biome==='water')return WATER_Y+0.12;
+  if(u.fly)return Math.max(heightAt(x,z),WATER_Y)+(u.hover||0);
+  return heightAt(x,z)+(u.hover||0);
+}
 // Idle bob / float, shared by the idle and turning phases.
 function settle(a,u){
   if(u.biome==='water'){
     const tt=performance.now()*0.001;
     a.position.y=WATER_Y+0.15+Math.sin(a.position.x*0.15+tt*1.1)*0.22+Math.cos(a.position.z*0.19+tt*1.4)*0.18;
   }else{
-    const g=heightAt(a.position.x,a.position.z)+(u.hover||0);
-    a.position.y=g+Math.sin(performance.now()*0.003+u.face)*(u.hover?0.3:0.05);
+    a.position.y=rideY(u,a.position.x,a.position.z)+Math.sin(performance.now()*0.003+u.face)*(u.fly?0.6:u.hover?0.3:0.05);
+    if(u.fly)flap(u);
   }
   if(u.pulse)a.scale.setScalar(u.baseS*(1+0.07*Math.sin(performance.now()*0.003+u.face)));
+}
+
+/* Can this creature step to (tx,tz)? Grazers avoid water, mountains, canyons,
+   high ground and roads (they never cross a road); ducks stay on water; birds
+   (u.fly) fly over anything so are never blocked. */
+function stepOK(u,x0,z0,tx,tz){
+  if(u.fly)return true;
+  const s=sample(tx,tz);
+  if(u.biome==='water')return s.biome==='water';
+  if(s.biome==='water'||s.biome==='mountain'||s.biome==='canyon')return false;
+  if(s.h>MTN_H-4)return false;
+  if(roadDist(tx,tz)<ROAD_HW+2)return false;                       // never onto the tarmac
+  if(roadDist((x0+tx)*0.5,(z0+tz)*0.5)<ROAD_HW+1)return false;      // never across it
+  return true;
 }
 
 export function updateAnimals(dt){
@@ -143,24 +192,44 @@ export function updateAnimals(dt){
     // special.js cancels movement by nulling u.hop; drop out of stepping too.
     if(u.phase==='step'&&!u.hop)u.phase='idle';
 
+    // Night: grazers and ducks sleep in place (in their spawn groups) until the
+    // tractor beam sweeps over them, then they wake and bolt. Birds fly on.
+    if(!u.fly){
+      const night=(S?S.dayF:1)<0.4;
+      const dx=a.position.x-saucer.position.x, dz=a.position.z-saucer.position.z;
+      const R=effBeamR()*1.7;
+      const woke=S.beamPower>0.3 && (dx*dx+dz*dz)<R*R;
+      if(night && !woke){
+        u.phase='idle'; u.hop=null; if(u.hopTimer<0.6)u.hopTimer=0.6+Math.random();
+        const g=(u.biome==='water')?WATER_Y+0.12:heightAt(a.position.x,a.position.z);
+        a.position.y=g+0.02*Math.sin(performance.now()*0.0015+u.face);   // slow sleeping breath
+        continue;
+      }
+    }
+
     if(u.phase==='turn'){
       a.rotation.y=turnToward(a.rotation.y,u.turnTo,(u.turnRate||2.8)*dt);
       settle(a,u);
       if(Math.abs(wrapAngle(u.turnTo-a.rotation.y))<TURN_EPS){
-        // Facing the new heading — now commit the step along the nose.
+        // Facing the new heading — commit the step, unless it would leave valid
+        // ground (water/mountain/canyon) or cross a road: then pick a new heading.
         const dspd=0.7+0.55*(S?S.dayF:1);              // day faster, night slower
         const dist=(u.hopDist||3)+Math.random()*(u.hopRng||2.5);
         const fx=Math.sin(a.rotation.y), fz=Math.cos(a.rotation.y);
-        u.hop={fx:a.position.x,fz:a.position.z,
-               tx:a.position.x+fx*dist,tz:a.position.z+fz*dist,
-               t:0,dur:(u.hopDur||0.55)/dspd};
-        u.phase='step';
+        const tx=a.position.x+fx*dist, tz=a.position.z+fz*dist;
+        if(!stepOK(u,a.position.x,a.position.z,tx,tz)){
+          u.turnTo=wrapAngle(a.rotation.y+(Math.random()<0.5?-1:1)*(1.6+Math.random()*1.2));   // turn away, retry
+        }else{
+          u.hop={fx:a.position.x,fz:a.position.z,tx,tz,t:0,dur:(u.hopDur||0.55)/dspd};
+          u.phase='step';
+        }
       }
     }else if(u.phase==='step'){
       u.hop.t+=dt/u.hop.dur;
       const t=Math.min(1,u.hop.t);
       const x=lerp(u.hop.fx,u.hop.tx,t), z=lerp(u.hop.fz,u.hop.tz,t);
-      const ground=(u.biome==='water'?WATER_Y+0.1:heightAt(x,z))+(u.hover||0);
+      const ground=rideY(u,x,z);
+      if(u.fly)flap(u);
       a.position.set(x,ground+Math.sin(Math.PI*t)*0.5,z);
       if(u.roll)a.rotation.x+=dt*16;                   // tumblers spin as they go
       if(t>=1){

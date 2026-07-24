@@ -82,13 +82,25 @@ export function buildChunk(cx,cz){
     const sm=sample(wx,wz);
     let a;
     if(World.name==='earth'){
-      // Keep fauna off mountains, out of canyons and off open/deep water.
-      if(sm.biome==='mountain'||sm.biome==='canyon'||sm.h>MTN_H-4) continue;
-      if(sm.biome==='water'&&sm.h<WATER_Y-1.5) continue;   // shore ducks only, no deep water
-      const chance=(sm.biome==='water')?0.5:0.5;
-      if(Math.random()>chance) continue;
-      a=buildAnimal(sm.biome);
-      a.position.set(wx,(sm.biome==='water'?WATER_Y+0.15:sm.h),wz);
+      const w=sm.biome;
+      let species;
+      if(w==='water'){
+        if(sm.h<WATER_Y-1.5)continue;                        // shore ducks only, no open water
+        species='Duck';
+      }else if(w==='desert'||w==='mountain'||w==='canyon'||sm.h>MTN_H-4){
+        // No grazers on sand / mountains / canyons — only the odd bird passing over.
+        if(Math.random()>0.20)continue;
+        species='Bird';
+      }else{
+        // plains / forest: grazers kept off the road, plus a few birds.
+        if(roadDist(wx,wz)<ROAD_HW+3)continue;
+        if(Math.random()>0.55)continue;
+        const r=Math.random();
+        species=r<0.10?'Bird':r<0.50?'Sheep':r<0.80?'Horse':'Goat';
+      }
+      a=buildAnimal(species);
+      a.position.set(wx, a.userData.fly?Math.max(sm.h,WATER_Y)+a.userData.hover
+                        :(w==='water'?WATER_Y+0.15:sm.h), wz);
     }else{
       if(Math.random()>0.5) continue;
       const roll=Math.random();
