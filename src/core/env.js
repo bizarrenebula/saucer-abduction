@@ -26,14 +26,15 @@ const FORCED = (location.search.match(/[?&]detail=(high|low)/) || [])[1] || null
 export const env = {
   IS_IOS,
   LOW_END: FORCED ? FORCED === 'low' : (IS_IOS || TOUCH_ONLY),
-  VIEW_R: 2,          // 5x5 (desktop) / 3x3 (mobile) grid of chunks
+  VIEW_R: 3,          // 7x7 (desktop) / 5x5 (mobile) grid of chunks — a wider
+                      // loaded area so the terrain edge sits far out in the fog
   usePost: true,      // post-processing on; auto-drops to false if the GPU rejects it
   // Pure-JS experiment: skip ALL external GLB/texture downloads and run entirely
   // on procedural geometry, so the twisted dark-cartoon look is the real look on
   // every device. Flip to false (or use ?models=on) to bring the GLB set back.
   noExternal: true,
 };
-if (env.LOW_END) env.VIEW_R = 1;
+if (env.LOW_END) env.VIEW_R = 2;
 if (/[?&]models=on/.test(location.search)) env.noExternal = false;   // escape hatch
 
 /* Custom models/textures load only when external assets are enabled. */

@@ -44,22 +44,24 @@ export function applyDayNightLight(){
   sun.color.setRGB(lerp(0.62,1.0,f),lerp(0.75,0.95,f),lerp(1.0,0.82,f));  // cool moonlight → warm sun
   // gentle exposure lift only — avoids the "brightness maxed" look
   renderer.toneMappingExposure=(env.usePost?1.08:1.18)*(0.9+0.34*f);
-  // haze warms and thins a little by day, near-black and denser at night
+  // FOG = the sky's horizon colour (wc.fog matches sky[2]) so distant terrain
+  // dissolves seamlessly into the sky — no hard chunk edge, a soft fog-of-war
+  // reveal as you move. Only a slight lift by day. Density eases with the light.
   if(wc){
     const nf=wc.fog;const nr=(nf>>16)&255,ng=(nf>>8)&255,nb=nf&255;
-    scene.fog.color.setRGB(lerp(nr,120,f)/255,lerp(ng,140,f)/255,lerp(nb,158,f)/255);
+    scene.fog.color.setRGB((nr+f*24)/255,(ng+f*28)/255,(nb+f*32)/255);
   }
-  scene.fog.density=lerp(env.LOW_END?0.0092:0.0062, env.LOW_END?0.0060:0.0040, f);
+  scene.fog.density=lerp(env.LOW_END?0.0140:0.0075, env.LOW_END?0.0110:0.0056, f);
   // stars fade out by day, moon fades in by night
   if(stars)stars.material.opacity=(wc?wc.stars:0.7)*(1-f);
   if(moon)moon.material.opacity=0.9*(1-f)+0.15;
 }
 export const WORLD_CFG={
-  earth:{sky:['#010203','#040a0d','#0a1416'],fog:0x070e10,hemi:[0x264a5a,0.42],sun:[0x8fb2c8,0.7],
+  earth:{sky:['#010203','#040a0d','#0a1416'],fog:0x0a1416,hemi:[0x264a5a,0.42],sun:[0x8fb2c8,0.7],
     water:true,stars:0.7,moonTint:0xffffff,label:'Earth'},
-  moon:{sky:['#000000','#010203','#040608'],fog:0x04060a,hemi:[0x40454e,0.35],sun:[0xdfe8f4,0.95],
+  moon:{sky:['#000000','#010203','#040608'],fog:0x040608,hemi:[0x40454e,0.35],sun:[0xdfe8f4,0.95],
     water:false,stars:1.0,moonTint:0x7fa8d8,label:'Moon'},
-  mars:{sky:['#0a0303','#150705','#221008'],fog:0x190c07,hemi:[0x4e2c20,0.45],sun:[0xd8926a,0.75],
+  mars:{sky:['#0a0303','#150705','#221008'],fog:0x221008,hemi:[0x4e2c20,0.45],sun:[0xd8926a,0.75],
     water:false,stars:0.5,moonTint:0xd8b090,label:'Mars'}
 };
 const skyCache={};
