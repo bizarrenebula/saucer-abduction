@@ -76,6 +76,13 @@ export function buildChunk(cx,cz){
   scene.add(mesh);
   // spawn animals / pickups / props
   const spawned=[],pk=[],pr=[];
+  // Occupancy: solid objects claim a footprint radius; a new object is only
+  // placed where it doesn't overlap an already-placed one, so nothing fuses.
+  const placed=[];
+  const clearSpot=(x,z,r)=>{ for(const p of placed){const dx=p.x-x,dz=p.z-z; if(dx*dx+dz*dz<(p.r+r)*(p.r+r))return false;} return true; };
+  const mark=(x,z,r)=>placed.push({x,z,r});
+  // A building needs roughly level ground under its footprint.
+  const flatEnough=(x,z,r)=>{const h0=sample(x,z).h; for(const d of [[r,0],[-r,0],[0,r],[0,-r]])if(Math.abs(sample(x+d[0],z+d[1]).h-h0)>3.5)return false; return true;};
   const tries=LOW_END?4:7;
   for(let t=0;t<tries;t++){
     const wx=ox+Math.random()*CHUNK, wz=oz+Math.random()*CHUNK;
@@ -99,8 +106,11 @@ export function buildChunk(cx,cz){
         species=r<0.12?'Bird':r<0.64?'Sheep':'Goat';
       }
       a=buildAnimal(species);
+      // Ground animals keep clear of solids so they don't spawn inside a tree.
+      if(!a.userData.fly && !clearSpot(wx,wz,2.2))continue;
       a.position.set(wx, a.userData.fly?Math.max(sm.h,WATER_Y)+a.userData.hover
                         :(w==='water'?WATER_Y+0.15:sm.h), wz);
+      if(!a.userData.fly)mark(wx,wz,1.8);
     }else{
       if(Math.random()>0.5) continue;
       const roll=Math.random();
@@ -108,7 +118,9 @@ export function buildChunk(cx,cz){
         ?(roll<0.45?'blob':roll<0.8?'crawler':'skimmer')
         :(roll<0.4?'strider':roll<0.7?'wormling':'tumbler');
       a=buildAlien(form);
+      if(!clearSpot(wx,wz,2.0))continue;
       a.position.set(wx,sm.h+(a.userData.hover||0),wz);
+      mark(wx,wz,1.8);
     }
     a.rotation.y=a.userData.face;
     scene.add(a);animals.push(a);spawned.push(a);
@@ -120,11 +132,12 @@ export function buildChunk(cx,cz){
       const wx=ccx2+(Math.random()-0.5)*10, wz=ccz2+(Math.random()-0.5)*10;
       const sm=sample(wx,wz);
       if(World.name==='earth'&&sm.biome==='water')continue;
+      if(!clearSpot(wx,wz,1.4))continue;     // not inside a tree/rock/animal
       const item=buildCrystal();
       const by=sm.h-0.45;                    // semi-buried
       item.position.set(wx,by,wz);item.userData.baseY=by;
       item.rotation.y=Math.random()*6.28;
-      scene.add(item);pickups.push(item);pk.push(item);
+      scene.add(item);pickups.push(item);pk.push(item);mark(wx,wz,1.3);
     }
   }
   // Scenery: forests are tree-dense, plains sparse, deserts get the odd cactus.
@@ -147,10 +160,11 @@ export function buildChunk(cx,cz){
     }else{
       if(Math.random()>0.45)continue;
     }
+    if(!clearSpot(wx,wz,2.4))continue;        // keep scenery from fusing together
     const prop=buildProp(sm.biome);
     prop.position.set(wx,sm.h,wz);prop.userData.baseY=sm.h;
     prop.rotation.y=Math.random()*6.28;
-    scene.add(prop);props.push(prop);pr.push(prop);
+    scene.add(prop);props.push(prop);pr.push(prop);mark(wx,wz,2.1);
   }
   /* Buildings are placed after scenery, so anything they land on is removed —
      otherwise a gas station or barn swallows a tree. */
@@ -167,30 +181,32 @@ export function buildChunk(cx,cz){
   if(World.name==='earth'&&Math.random()<0.32){
     const wx=ox+8+Math.random()*(CHUNK-16), wz=oz+8+Math.random()*(CHUNK-16);
     const sm=sample(wx,wz);
-    if(sm.biome!=='water'&&sm.h<20&&sm.h>=WATER_Y+1.6&&roadDist(wx,wz)>ROAD_HW+9){
-      const kind=sm.biome==='plains'?'barn':'camp';
+    if(sm.biome!=='water'&&sm.biome!=='canyon'&&sm.biome!=='mountain'&&sm.h<20&&sm.h>=WATER_Y+1.6
+       &&roadDist(wx,wz)>ROAD_HW+9&&clearSpot(wx,wz,11)&&flatEnough(wx,wz,9)){
+      const kind=sm.biome==='desert'?'camp':'barn';
       const b=buildBuilding(kind);
       b.position.set(wx,sm.h,wz);b.rotation.y=Math.random()*6.28;
-      clearPropsNear(wx,wz,9);
+      clearPropsNear(wx,wz,10);mark(wx,wz,10);
       scene.add(b);bl.push(b);buildings.push(b);
       const shel={x:wx,z:wz};shelters.push(shel);sh.push(shel);
       const nh=1+((Math.random()*2)|0);
       for(let h=0;h<nh;h++){
-        const hx=wx+(Math.random()-0.5)*16, hz=wz+(Math.random()-0.5)*16;
+        const hx=wx+(Math.random()-0.5)*18, hz=wz+(Math.random()-0.5)*18;
         const sm2=sample(hx,hz);
-        if(sm2.biome==='water')continue;
+        if(sm2.biome==='water'||sm2.biome==='mountain'||sm2.biome==='canyon')continue;
+        if(!clearSpot(hx,hz,1.6))continue;
         const hu=buildHuman(kind==='barn'?'villager':'hiker');
         hu.position.set(hx,sm2.h,hz);hu.rotation.y=hu.userData.face;
-        scene.add(hu);animals.push(hu);spawned.push(hu);
+        scene.add(hu);animals.push(hu);spawned.push(hu);mark(hx,hz,1.4);
       }
     }
   }else if(World.name==='earth'&&Math.random()<0.1){
     const wx=ox+Math.random()*CHUNK, wz=oz+Math.random()*CHUNK;
     const sm=sample(wx,wz);
-    if(sm.biome==='mountain'||sm.biome==='plains'){
+    if((sm.biome==='plains'||sm.biome==='forest')&&roadDist(wx,wz)>ROAD_HW+3&&clearSpot(wx,wz,1.6)){
       const hu=buildHuman('hiker');
       hu.position.set(wx,sm.h,wz);
-      scene.add(hu);animals.push(hu);spawned.push(hu);
+      scene.add(hu);animals.push(hu);spawned.push(hu);mark(wx,wz,1.4);
     }
   }
   /* ---- roads: deck geometry, then roadside population (Earth only) ---- */
@@ -218,22 +234,24 @@ export function buildChunk(cx,cz){
         const side=Math.random()<0.5?1:-1, off=ROAD_HW+8;
         const sx=sp.x+sp.fz*off*side, sz=sp.z-sp.fx*off*side;
         const sm2=sample(sx,sz);
-        if(sm2.biome!=='water'&&sm2.biome!=='mountain'&&sm2.h>WATER_Y+1){
+        if(sm2.biome!=='water'&&sm2.biome!=='mountain'&&sm2.biome!=='canyon'&&sm2.h>WATER_Y+1
+           &&clearSpot(sx,sz,12)&&flatEnough(sx,sz,9)){
           const st=buildStation();
-          clearPropsNear(sx,sz,13);
+          clearPropsNear(sx,sz,13);mark(sx,sz,11);
           st.position.set(sx,sm2.h,sz);
           st.rotation.y=Math.atan2(-sp.fz*side,sp.fx*side);   // forecourt toward the road
           scene.add(st);bl.push(st);buildings.push(st);
           const shel={x:sx,z:sz};shelters.push(shel);sh.push(shel);
           const nh=2+((Math.random()*2)|0);
           for(let h=0;h<nh;h++){
-            const hx=sx+(Math.random()-0.5)*11, hz=sz+(Math.random()-0.5)*11;
+            const hx=sx+(Math.random()-0.5)*12, hz=sz+(Math.random()-0.5)*12;
             const sm3=sample(hx,hz);
-            if(sm3.biome==='water')continue;
+            if(sm3.biome==='water'||sm3.biome==='mountain'||sm3.biome==='canyon')continue;
+            if(!clearSpot(hx,hz,1.6))continue;
             const hu=buildHuman('villager');
             hu.userData.scatter=1;
             hu.position.set(hx,sm3.h,hz);hu.rotation.y=hu.userData.face;
-            scene.add(hu);animals.push(hu);spawned.push(hu);
+            scene.add(hu);animals.push(hu);spawned.push(hu);mark(hx,hz,1.4);
           }
         }
       }
