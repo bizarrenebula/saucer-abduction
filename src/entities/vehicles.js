@@ -19,7 +19,7 @@ import { effBeamR } from '../systems/beam.js';
 import { heightAt } from '../world/terrain.js';
 import { CHUNK } from '../core/constants.js';
 import { scene } from '../core/engine.js';
-import { roadSample, ROAD_LANE } from '../world/roads.js';
+import { roadSample, ROAD_LANE, ROAD_S, junctionMode } from '../world/roads.js';
 import { LOADED, spawnModel } from '../assets.js';
 import { animals, vehicles } from './registry.js';
 import { buildHuman } from './humans.js';
@@ -71,7 +71,7 @@ export function buildVehicle(kind){
   u.vehicle=kind;
   u.cruise=V.cruise*(0.85+Math.random()*0.3);
   u.speed=u.cruise;
-  u.lift=0;u.fall=0;u.vy=0;u.stun=0;u.spin=1;u.grabY=0;u.roadY=0;
+  u.lift=0;u.fall=0;u.vy=0;u.stun=0;u.spin=1;u.grabY=0;u.roadY=0;u.turnLock=0;
   u.occupants=kind==='bus1'?(2+((Math.random()*3)|0)):(1+((Math.random()*2)|0));
   u.block=!!V.block;u.blockR=V.w*OBJ_SCALE+2.2;u.blockH=V.h*OBJ_SCALE*1.35;
   return g;
@@ -124,6 +124,23 @@ function bailOut(g){
     scene.add(hu);animals.push(hu);
     if(ck)ck.animals.push(hu);
   }
+}
+
+const TURN_CHANCE=0.4;   // odds a car turns rather than going straight at a level crossroad
+
+/* At a level crossroad a car may turn onto the crossing corridor (either way) or
+   carry straight on; at an overpass it can't turn, it just passes under/over. jc
+   is the grid coordinate (multiple of ROAD_S) it just reached along its axis. */
+function tryTurn(u,jc){
+  const kx=u.axis==='x'?jc:u.k, kz=u.axis==='x'?u.k:jc;
+  if(junctionMode(kx,kz).overpass)return;          // separated levels — no turning
+  if(Math.random()>=TURN_CHANCE)return;            // most traffic drives straight through
+  const cross=roadSample(u.axis,u.k,jc);           // the junction point on our current road
+  u.axis=u.axis==='x'?'z':'x';                     // hop onto the crossing corridor
+  u.k=jc;
+  u.t=u.axis==='x'?cross.x:cross.z;
+  u.dir=Math.random()<0.5?1:-1;                    // left or right
+  u.turnLock=ROAD_S*0.25;                          // don't re-trigger on this same node
 }
 
 export function updateVehicles(dt,beamActive){
@@ -185,7 +202,15 @@ export function updateVehicles(dt,beamActive){
     const want=overhead?0:u.cruise;
     u.speed=lerp(u.speed,want,Math.min(1,dt*(overhead?3.2:0.9)));
     if(u.speed>0.02){
+      const before=u.t;
       u.t+=u.speed*u.dir*dt;
+      // Did we drive across a junction coordinate this step? If so, maybe turn.
+      if(u.turnLock>0){ u.turnLock-=Math.abs(u.t-before); }
+      else{
+        const lo=Math.min(before,u.t), hi=Math.max(before,u.t);
+        const jc=Math.ceil(lo/ROAD_S)*ROAD_S;
+        if(jc<=hi)tryTurn(u,jc);
+      }
       syncVehicle(g,dt);
     }
   }

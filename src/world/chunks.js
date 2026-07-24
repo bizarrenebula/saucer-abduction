@@ -285,9 +285,13 @@ export function buildChunk(cx,cz){
         scene.add(v);vh.push(v);
       }
     }
-    // clean crossroad nodes where corridors intersect within this chunk: one
-    // flush, unmarked octagon seated on the shared deck, a flat facing each arm.
+    // crossroad nodes where corridors intersect within this chunk. A LEVEL
+    // crossroad gets a flush, unmarked octagon seated on the shared deck (a flat
+    // facing each arm) so the roads join and traffic can turn. An OVERPASS gets
+    // NO node — one carriageway humps up and flies over the other (the lift is
+    // baked into that corridor's deck height), so they must stay separate.
     for(const j of junctionsIn(ox,oz,CHUNK)){
+      if(j.overpass)continue;
       // clone the template geo per pad: chunk unload disposes each road geometry,
       // which would free a shared one still used by other chunks' junctions.
       const pad=new THREE.Mesh(junctionGeo.clone(),junctionMat);

@@ -48,6 +48,39 @@ const WATER_LOOK   = 4;     // steps either side that count as spanning water
 // gets its real character from routing around terrain, not from a sine wave.
 export function wob(t){ return Math.sin(t*0.011)*6 + Math.sin(t*0.023+1.7)*2.5; }
 
+/* ---------- crossroads: overpass vs level junction ----------
+   Every grid point (kx,kz) is either a LEVEL crossroad (the two carriageways
+   meet flat and traffic may turn between them) or an OVERPASS (one corridor
+   humps up and flies over the other; traffic just passes under/over, no turns).
+   The choice — and which corridor is on top — is a deterministic hash of the
+   grid indices, so it is identical in every chunk and across reloads. */
+const OP_CLEAR = 6.5;    // how high the over-road's deck rises above the crossing
+const OP_RAMP  = 58;     // half-length of the hump's approach ramp (world units)
+const OP_SHARE = 0.42;   // fraction of 4-way crossings built as an overpass
+
+function jhash(a,b){ let h=Math.imul(a|0,73856093)^Math.imul(b|0,19349663); h^=h>>>13; return ((h>>>0)%100000)/100000; }
+/* mode for the junction at world grid coords (kx,kz) — both multiples of ROAD_S. */
+export function junctionMode(kx,kz){
+  const ix=Math.round(kx/ROAD_S), iz=Math.round(kz/ROAD_S);
+  if(jhash(ix,iz)<OP_SHARE) return { overpass:true, over: jhash(iz*7+1,ix*13+3)<0.5 ? 'x' : 'z' };
+  return { overpass:false };
+}
+/* Extra deck height for corridor (axis,k) at world coordinate t along its axis,
+   from any nearby overpass where THIS corridor is the one on top. A raised-cosine
+   hump so vehicles climb a smooth ramp up and over, then settle again. */
+export function overpassLift(axis,k,t){
+  let lift=0;
+  const c0=Math.round(t/ROAD_S)*ROAD_S;
+  for(let c=c0-ROAD_S;c<=c0+ROAD_S;c+=ROAD_S){
+    const kx=axis==='x'?c:k, kz=axis==='x'?k:c;   // crossing grid point
+    const m=junctionMode(kx,kz);
+    if(!m.overpass||m.over!==axis)continue;
+    const d=Math.abs(t-c);
+    if(d<OP_RAMP){ const h=OP_CLEAR*0.5*(1+Math.cos(Math.PI*d/OP_RAMP)); if(h>lift)lift=h; }
+  }
+  return lift;
+}
+
 /* ---------- caches ---------- */
 const cCell=new Map(), cBlock=new Map(), cOff=new Map(), cDeck=new Map();
 const key=(a,k,i)=>a+'|'+k+'|'+i;
@@ -217,6 +250,7 @@ function deckEdge(axis,k,i){
   }
   let y=sum/wsum+ROAD_LIFT;
   if(overWater(axis,k,i))y=Math.max(WATER_Y+BRIDGE_CLEAR, y);
+  y+=overpassLift(axis,k,i*STEP);   // hump up and over at any overpass we're the top of
   cDeck.set(kk,y);return y;
 }
 /* Centre-line deck height — what vehicles and the ship ride on. Flat deck, so
@@ -348,7 +382,10 @@ export function junctionsIn(ox,oz,size){
       const d=Math.abs(a.x-b.x);
       if(d<best){best=d;bx=(a.x+b.x)*0.5;bz=a.z;by=Math.max(a.y,b.y);ang=Math.atan2(a.fx,a.fz);}
     }
-    if(best<ROAD_HW*1.7)out.push({x:bx,y:by,z:bz,ang});   // they really meet -> a junction
+    if(best<ROAD_HW*1.7){
+      const m=junctionMode(kx,kz);
+      out.push({x:bx,y:by,z:bz,ang,overpass:m.overpass,over:m.over});   // they really meet -> a junction
+    }
   }
   return out;
 }
