@@ -268,6 +268,28 @@ export const roadTex=(function(){
   return t;
 })();
 
+/* Plain asphalt with NO lane/edge markings, for the intersection node where two
+   carriageways meet. Same base tone and speckle as roadTex so a junction pad
+   reads as the identical road surface — just unmarked, the way the middle of a
+   real crossroads is. Tiles in both directions so the pad can repeat cleanly. */
+export const junctionTex=(function(){
+  const S=128,c=document.createElement('canvas');
+  c.width=S;c.height=S;const x=c.getContext('2d');
+  x.fillStyle='#5b5f66';x.fillRect(0,0,S,S);                  // asphalt base
+  for(let i=0;i<3600;i++){                                     // aggregate speckle
+    const l=64+Math.random()*105,r=0.5+Math.random()*1.9;
+    x.fillStyle='rgba('+(l|0)+','+(l|0)+','+(l*1.05|0)+','+(0.14+Math.random()*0.34)+')';
+    x.beginPath();x.arc(Math.random()*S,Math.random()*S,r,0,7);x.fill();
+  }
+  for(let i=0;i<10;i++){                                       // tar patches
+    x.fillStyle='rgba(46,49,54,'+(0.14+Math.random()*0.2)+')';
+    x.beginPath();x.ellipse(Math.random()*S,Math.random()*S,6+Math.random()*18,7+Math.random()*22,Math.random()*3,0,7);x.fill();
+  }
+  const t=new THREE.CanvasTexture(c);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=16;
+  return t;
+})();
+
 /* ---------- public sampling (used by vehicles) ---------- */
 /* Position + heading on the centre line at world coordinate t along the axis. */
 export function roadSample(axis,k,t){

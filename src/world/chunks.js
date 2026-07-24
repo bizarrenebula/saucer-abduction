@@ -10,7 +10,7 @@ import { scene } from '../core/engine.js';
 import { World } from './world-config.js';
 import { sample } from './terrain.js';
 import { TEX, grassTex, sandTex, rockTex, snowTex } from './textures.js';
-import { ROAD_HW, STEP, roadsNear, roadSample, buildRoadMesh, clearRoadCache, roadTex, roadDist, junctionsIn } from './roads.js';
+import { ROAD_HW, STEP, roadsNear, roadSample, buildRoadMesh, clearRoadCache, roadTex, junctionTex, roadDist, junctionsIn } from './roads.js';
 import { animals, pickups, props, buildings, vehicles, shelters } from '../entities/registry.js';
 import { buildAnimal } from '../entities/animals.js';
 import { buildAlien } from '../entities/aliens.js';
@@ -50,11 +50,25 @@ const roadMat=new THREE.MeshStandardMaterial({map:roadTex,roughness:0.93,metalne
 roadMat.color.setScalar(1.85);
 const pierMat=new THREE.MeshStandardMaterial({color:0x53565c,roughness:0.95});
 pierMat.color.multiplyScalar(1.5);
-/* Crossroad pad — a plain asphalt square laid over the messy overlap where two
-   roads meet, so the intersection reads as one clean junction. */
-const junctionMat=new THREE.MeshStandardMaterial({color:0x5b5f66,roughness:0.93,metalness:0.02});
-junctionMat.color.multiplyScalar(1.85);
-const JUNC=2.7*ROAD_HW;
+/* Crossroad node — the paved patch that fills the overlap where two
+   carriageways cross, so the intersection reads as one clean junction instead of
+   two ribbons z-fighting with their lane stripes doubled up. It uses the SAME
+   asphalt as the road (junctionTex, unmarked) and is an octagon sized to the
+   carriageway width: its four flats butt up to the four road arms and its four
+   chamfers cut the corners, so it seats seamlessly rather than sitting proud as
+   an oversized square. */
+const junctionMat=new THREE.MeshStandardMaterial({map:junctionTex,roughness:0.93,metalness:0.02});
+junctionMat.color.setScalar(1.85);
+const JUNC_R=ROAD_HW*1.12;               // octagon radius: flats ~ at the road edge
+// octagon deck, laid flat, a flat side facing each axis (rotate 22.5°)
+const junctionGeo=new THREE.CircleGeometry(JUNC_R,8);
+junctionGeo.rotateX(-Math.PI/2);junctionGeo.rotateY(Math.PI/8);
+// map the plain asphalt across it at road-ish scale so the speckle density matches
+(function(){
+  const uv=junctionGeo.attributes.uv, s=0.5/JUNC_R, pos=junctionGeo.attributes.position;
+  for(let i=0;i<uv.count;i++)uv.setXY(i, pos.getX(i)*s+0.5, pos.getZ(i)*s+0.5);
+  uv.needsUpdate=true;
+})();
 
 export function buildChunk(cx,cz){
   const geo=new THREE.PlaneGeometry(CHUNK,CHUNK,SEG,SEG);
@@ -271,11 +285,13 @@ export function buildChunk(cx,cz){
         scene.add(v);vh.push(v);
       }
     }
-    // clean crossroad pads where corridors intersect within this chunk
+    // clean crossroad nodes where corridors intersect within this chunk: one
+    // flush, unmarked octagon seated on the shared deck, a flat facing each arm.
     for(const j of junctionsIn(ox,oz,CHUNK)){
-      const g=new THREE.PlaneGeometry(JUNC,JUNC);g.rotateX(-Math.PI/2);
-      const pad=new THREE.Mesh(g,junctionMat);
-      pad.position.set(j.x,j.y+0.10,j.z);pad.rotation.y=j.ang;pad.receiveShadow=true;
+      // clone the template geo per pad: chunk unload disposes each road geometry,
+      // which would free a shared one still used by other chunks' junctions.
+      const pad=new THREE.Mesh(junctionGeo.clone(),junctionMat);
+      pad.position.set(j.x,j.y+0.05,j.z);pad.rotation.y=j.ang;pad.receiveShadow=true;
       scene.add(pad);rd.push(pad);
     }
   }
