@@ -69,6 +69,7 @@ const clock=new THREE.Clock();
 const RING_LEN=2*Math.PI*19;   // r=19 in the cloak-ring SVG viewBox
 let altHudT=0;                 // keeps the altitude scale up briefly after an altitude change
 let camZoom=1;                 // chase-camera distance multiplier, eased toward altitude
+let camPitchE=0;               // eased camera pitch: 0 behind-the-ship, 1 top-down (angle slider)
 function updateShipGestureHUD(){
   if(cloakRing){               // hold-the-ship-to-cloak progress ring
     const p=input.cloakProg||0;
@@ -349,13 +350,20 @@ function animate(){
     // Chase camera rides behind the nose: rotate the offset by the heading so the
     // view swings with the ship and "forward" stays into the screen. input.zoom
     // is the zoom-slider multiplier layered on top of the altitude zoom.
+    // Angle slider: blend the chase offset from the behind-the-ship framing
+    // (camOffset) toward a top-down one as camPitch → 1. Eased so a drag glides.
+    camPitchE=lerp(camPitchE,input.camPitch,Math.min(1,dt*3));
+    const p=camPitchE;
+    const offY=lerp(camOffset.y,46,p);      // rise overhead
+    const offZ=lerp(camOffset.z,6,p);       // and pull in almost directly above
+    const lookY=lerp(camLook.y,0,p);        // aim down onto the ship
     const z=camZoom*input.zoom;
     const cs=Math.sin(S.yaw), cc=Math.cos(S.yaw);
-    const ox=(camOffset.x*cc+camOffset.z*cs)*z;
-    const oz=(-camOffset.x*cs+camOffset.z*cc)*z;
-    const desired=_v.set(saucer.position.x+ox,saucer.position.y+camOffset.y*z,saucer.position.z+oz);
+    const ox=(camOffset.x*cc+offZ*cs)*z;
+    const oz=(-camOffset.x*cs+offZ*cc)*z;
+    const desired=_v.set(saucer.position.x+ox,saucer.position.y+offY*z,saucer.position.z+oz);
     camera.position.lerp(desired,Math.min(1,dt*2.4));
-    camera.lookAt(saucer.position.x+camLook.x,saucer.position.y+camLook.y,saucer.position.z+camLook.z);
+    camera.lookAt(saucer.position.x+camLook.x,saucer.position.y+lookY,saucer.position.z+camLook.z);
 
     /* ---- clock ---- */
     S.elapsed+=dt;

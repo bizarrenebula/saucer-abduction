@@ -32,6 +32,7 @@ export const input={
   tFwd:0, tStrafe:0, tTurn:0, tClimb:0,   // touch joystick axes, each -1..1
   beamHold:false, spHeld:false,
   zoom:1,                                  // camera-zoom multiplier, driven by the slider
+  camPitch:0,                              // 0 = behind-the-ship view, 1 = top-down; the angle slider
   cloakProg:0,                             // 0..1 progress of the hold-the-ship-to-cloak timer
 };
 
@@ -163,6 +164,16 @@ if(zoomSlider){
   apply();
 }
 
+/* ---- camera-angle slider (vertical, beside the zoom slider) ----
+   Tilts the chase camera between the behind-the-ship view (bottom) and a
+   top-down view (top). The <input> value runs 0..1 bottom→top. */
+const angleSlider=document.getElementById('angleSlider');
+if(angleSlider){
+  const apply=()=>{ input.camPitch=+angleSlider.value; };
+  angleSlider.addEventListener('input',apply);
+  apply();
+}
+
 /* Reset all touch intents (called by startGame / respawn). */
 export function resetInputTouch(){
   input.tFwd=input.tStrafe=input.tTurn=input.tClimb=0;
@@ -172,4 +183,5 @@ export function resetInputTouch(){
   ptrHalf.clear();pos.clear();cancelCloakHold();
   hideJoy('L');hideJoy('R');setBeaming('L',false);setBeaming('R',false);
   if(zoomSlider){ zoomSlider.value='1'; input.zoom=1; }
+  // camera angle is a viewing preference — leave it where the player set it.
 }
