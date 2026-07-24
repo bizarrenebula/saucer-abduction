@@ -381,45 +381,57 @@
   .stat .k{font-size:9px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink-soft);text-align:center}
   .loading{font-size:11px;letter-spacing:.24em;color:var(--ink-soft);text-align:center}
 
-  /* ---------- radial "saucer" setup menu ---------- */
-  .setup{width:min(460px,94vw);text-align:center;margin:auto}
-  .setup h1{font-size:30px}
-  .setup .slogan{margin:2px 0 12px}
-  .setup .howto{margin:10px 0 4px}
+  /* ---------- radial "saucer" setup menu ----------
+     The start screen is the saucer and almost nothing else: a slim wordmark
+     above it, the disc itself, and a loading line below. Every choice — world,
+     mode, tuning, and how to play — lives on the four sectors of the rim. */
+  .setup{width:min(440px,94vw);text-align:center;margin:auto}
+  .setup h1{font-size:26px;letter-spacing:.06em;margin-bottom:2px}
+  .setup .saucer-tag{font-size:9px;letter-spacing:.42em;text-transform:uppercase;
+    color:var(--beam-dim);margin-bottom:2px}
 
-  #saucerMenu{position:relative;width:min(84vw,360px);aspect-ratio:1;margin:16px auto 8px;
+  #saucerMenu{position:relative;width:min(86vw,380px);aspect-ratio:1;margin:20px auto 12px;
     touch-action:none;-webkit-user-select:none;user-select:none}
-  /* the disc: a domed saucer seen from above, with a rim and sector dividers */
+  /* the disc: a domed metallic saucer seen from above — soft dome specular,
+     concentric hull panels, four sector dividers, and a gentle outer halo. */
   .saucer-rim{position:absolute;inset:0;border-radius:50%;
     background:
-      radial-gradient(circle at 50% 40%,rgba(143,232,184,.10),transparent 46%),
-      radial-gradient(circle at 50% 50%,#12291f 0 44%,#0c1f18 45% 66%,#081511 67% 100%);
-    border:1px solid var(--edge);
-    box-shadow:0 18px 50px rgba(0,0,0,.6),inset 0 0 40px rgba(0,0,0,.55),
-      inset 0 0 0 1px rgba(143,232,184,.06)}
-  /* thin radial dividers at the three sector boundaries (conic 60/180/300°) */
+      radial-gradient(circle at 42% 34%,rgba(180,240,205,.16),transparent 42%),
+      repeating-radial-gradient(circle at 50% 50%,transparent 0 6.4%,rgba(143,232,184,.045) 6.4% 6.9%),
+      radial-gradient(circle at 50% 50%,#143026 0 40%,#0e2219 41% 63%,#08150f 64% 100%);
+    border:1px solid rgba(143,232,184,.14);
+    box-shadow:0 26px 70px rgba(0,0,0,.55),0 0 46px rgba(89,255,176,.06),
+      inset 0 0 48px rgba(0,0,0,.5),inset 0 0 0 1px rgba(143,232,184,.05)}
+  /* an inner bezel ring, for depth/detail */
+  .saucer-rim::before{content:'';position:absolute;inset:7%;border-radius:50%;
+    border:1px solid rgba(143,232,184,.08);
+    box-shadow:inset 0 0 34px rgba(0,0,0,.45),0 1px 0 rgba(143,232,184,.04)}
+  /* soft radial dividers at the four sector boundaries (conic 45/135/225/315°) */
   .saucer-rim::after{content:'';position:absolute;inset:0;border-radius:50%;
     background:conic-gradient(from 0deg,
-      transparent 58deg,rgba(150,190,170,.20) 60deg,transparent 62deg,
-      transparent 178deg,rgba(150,190,170,.20) 180deg,transparent 182deg,
-      transparent 298deg,rgba(150,190,170,.20) 300deg,transparent 302deg);
-    -webkit-mask:radial-gradient(circle,transparent 32%,#000 33%);
-            mask:radial-gradient(circle,transparent 32%,#000 33%)}
-  /* highlighted 120° wedge under the finger (start angle set via --a) */
-  #saucerHi{position:absolute;inset:0;border-radius:50%;opacity:0;transition:opacity .15s;
+      transparent 42deg,rgba(150,190,170,.16) 45deg,transparent 48deg,
+      transparent 132deg,rgba(150,190,170,.16) 135deg,transparent 138deg,
+      transparent 222deg,rgba(150,190,170,.16) 225deg,transparent 228deg,
+      transparent 312deg,rgba(150,190,170,.16) 315deg,transparent 318deg);
+    -webkit-mask:radial-gradient(circle,transparent 30%,#000 33%);
+            mask:radial-gradient(circle,transparent 30%,#000 33%)}
+  /* highlighted 90° wedge under the finger (start angle set via --a) */
+  #saucerHi{position:absolute;inset:0;border-radius:50%;opacity:0;transition:opacity .18s;
     background:conic-gradient(from var(--a,0deg),
-      rgba(143,232,184,.30),rgba(143,232,184,.06) 120deg,transparent 120deg);
-    -webkit-mask:radial-gradient(circle,transparent 32%,#000 33%);
-            mask:radial-gradient(circle,transparent 32%,#000 33%)}
+      rgba(143,232,184,.34),rgba(143,232,184,.05) 90deg,transparent 90deg);
+    -webkit-mask:radial-gradient(circle,transparent 30%,#000 33%);
+            mask:radial-gradient(circle,transparent 30%,#000 33%)}
   #saucerHi.on{opacity:1}
 
   .sector{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:34%;pointer-events:none;text-align:center;z-index:2;transition:.15s}
-  .sector[data-sector=world]{top:15%}
-  .sector[data-sector=mode]{left:79%;top:70%}
-  .sector[data-sector=extra]{left:21%;top:70%}
+    width:30%;pointer-events:none;text-align:center;z-index:2;transition:.18s}
+  .sector[data-sector=world]{top:13%;left:50%}
+  .sector[data-sector=mode]{left:84%;top:50%}
+  .sector[data-sector=howto]{top:87%;left:50%}
+  .sector[data-sector=extra]{left:16%;top:50%}
   .sector .s-name{display:block;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft)}
   .sector .s-val{display:block;font-size:12px;font-weight:700;color:var(--ink);margin-top:2px}
+  .sector.hot{transform:translate(-50%,-50%) scale(1.08)}
   .sector.hot .s-name{color:var(--beam)}
   .sector.hot .s-val{color:var(--beam);text-shadow:0 0 12px rgba(143,232,184,.6)}
 
@@ -428,18 +440,21 @@
   #saucerHit{position:absolute;inset:0;border-radius:50%;z-index:3;
     pointer-events:auto;cursor:pointer;touch-action:none}
 
-  /* core: holds the PLAY button when idle */
+  /* core: a recessed hub cradling the PLAY button, with a clear margin of bezel
+     around the button so it reads as seated, not filling the whole hub. */
   #saucerCore{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:46%;aspect-ratio:1;border-radius:50%;z-index:4;
-    display:flex;align-items:center;justify-content:center;
-    background:radial-gradient(circle at 50% 38%,#123024,#0a1c15 72%);
-    border:1px solid rgba(143,232,184,.18);box-shadow:inset 0 0 22px rgba(0,0,0,.6),0 0 26px rgba(0,0,0,.4);
-    transition:opacity .18s}
+    width:47%;aspect-ratio:1;border-radius:50%;z-index:4;box-sizing:border-box;
+    padding:13%;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 36%,#173a2b,#0a1c15 76%);
+    border:1px solid rgba(143,232,184,.14);
+    box-shadow:inset 0 0 26px rgba(0,0,0,.6),inset 0 0 0 1px rgba(143,232,184,.05),
+      0 0 30px rgba(0,0,0,.4);transition:opacity .2s}
   #saucerCore .play{width:100%;height:100%;margin:0;border-radius:50%;font-size:15px;letter-spacing:.22em;
-    box-shadow:0 0 26px rgba(89,255,176,.45)}
+    box-shadow:0 0 24px rgba(89,255,176,.4),inset 0 0 0 1px rgba(255,255,255,.12)}
   #saucerMenu.editing #saucerCore{opacity:0;pointer-events:none}
-  #saucerMenu:not(.editing) #saucerCore.ready .play:not(:disabled){animation:corePulse 1.5s infinite}
-  @keyframes corePulse{0%,100%{box-shadow:0 0 22px rgba(89,255,176,.4)}50%{box-shadow:0 0 42px rgba(89,255,176,.85)}}
+  #saucerMenu:not(.editing) #saucerCore.ready .play:not(:disabled){animation:corePulse 1.6s infinite}
+  @keyframes corePulse{0%,100%{box-shadow:0 0 20px rgba(89,255,176,.35),inset 0 0 0 1px rgba(255,255,255,.12)}
+    50%{box-shadow:0 0 44px rgba(89,255,176,.8),inset 0 0 0 1px rgba(255,255,255,.18)}}
 
   /* the pop-up panel that appears in the middle of the saucer. Capped to the
      saucer's own height and vertically centred, so it never spills up over the
@@ -468,10 +483,10 @@
   .confirm:active{transform:scale(.98)}
 
   @media (max-height:760px), (max-width:430px){
-    .setup h1{font-size:24px}
-    #saucerMenu{width:min(78vw,300px)}
+    .setup h1{font-size:22px}
+    #saucerMenu{width:min(80vw,310px)}
     #saucerCore .play{font-size:13px}
-    #saucerPanel{max-height:min(78vw,300px)}
+    #saucerPanel{max-height:min(80vw,310px)}
   }
 </style>
 </head>
@@ -552,24 +567,18 @@
 <!-- LANDING SCREEN — radial "saucer" setup menu -->
 <div class="screen" id="startScreen">
   <div class="setup">
-    <div class="eyebrow" data-i18n="eyebrow.protocol">night harvest protocol</div>
+    <div class="saucer-tag" data-i18n="eyebrow.protocol">night harvest protocol</div>
     <h1>ABDUCT<span class="g">OR</span></h1>
-    <div class="slogan" data-i18n="start.slogan">A silent sky. A hungry light. Take the sleeping world.</div>
 
-    <div class="howto">
-      <div class="howto-h" data-i18n="ctrl.title">controls</div>
-      <div class="howto-t"><b data-i18n="ctrl.pc">PC</b> — <span data-i18n-html="ctrl.desktop"></span></div>
-      <div class="howto-t"><b data-i18n="ctrl.mobile">Mobile</b> — <span data-i18n-html="ctrl.touch"></span></div>
-    </div>
-
-    <!-- the saucer: three sectors on the rim, a live core in the middle.
-         Slide a finger around the rim; releasing on a sector opens its panel
-         in the core. Confirm returns the core to a PLAY button. -->
+    <!-- the saucer IS the menu: four sectors on the rim, a live core in the
+         middle. Slide a finger around the rim; releasing on a sector opens its
+         panel in the core. Confirm returns the core to a PLAY button. -->
     <div id="saucerMenu">
       <div class="saucer-rim"></div>
       <div id="saucerHi"></div>
       <div class="sector" data-sector="world"><span class="s-name" data-i18n="field.world">World</span><span class="s-val" id="oWorld">Earth</span></div>
       <div class="sector" data-sector="mode"><span class="s-name" data-i18n="field.mode">Mode</span><span class="s-val" id="oMode">Exploration</span></div>
+      <div class="sector" data-sector="howto"><span class="s-name" data-i18n="field.howto">How to play</span><span class="s-val" data-i18n="ctrl.title">controls</span></div>
       <div class="sector" data-sector="extra"><span class="s-name" data-i18n="field.tuning">Tuning</span><span class="s-val" id="oExtra">3 min</span></div>
       <div id="saucerHit"></div>
 
@@ -580,6 +589,15 @@
 
       <!-- pop-up: the chosen sector's controls, centred over the saucer -->
       <div id="saucerPanel" class="hidden">
+        <div class="pan" id="panHowto">
+          <div class="pan-h" data-i18n="field.howto">How to play</div>
+          <div class="howto" style="margin:0">
+            <div class="howto-t"><b data-i18n="ctrl.pc">PC</b> — <span data-i18n-html="ctrl.desktop"></span></div>
+            <div class="howto-t"><b data-i18n="ctrl.mobile">Mobile</b> — <span data-i18n-html="ctrl.touch"></span></div>
+          </div>
+          <div class="howto-t" style="margin-top:12px;color:var(--ink-soft)" data-i18n="start.sub"></div>
+        </div>
+
         <div class="pan" id="panWorld">
           <div class="pan-h" data-i18n="field.world">World</div>
           <div class="seg col" id="segWorld">

@@ -225,16 +225,19 @@ const saucerHit=document.getElementById('saucerHit');
 const saucerHi=document.getElementById('saucerHi');
 const saucerCore=document.getElementById('saucerCore');
 const saucerPanel=document.getElementById('saucerPanel');
-// per-sector: the highlight wedge's conic start angle + the panel it opens
-const SECTORS={ world:{wedge:300,pan:'panWorld'}, mode:{wedge:60,pan:'panMode'}, extra:{wedge:180,pan:'panExtra'} };
+// per-sector: the highlight wedge's conic start angle + the panel it opens.
+// Four 90° quadrants: World (top), Mode (right), How to play (bottom), Tuning (left).
+const SECTORS={ world:{wedge:315,pan:'panWorld'}, mode:{wedge:45,pan:'panMode'},
+                howto:{wedge:135,pan:'panHowto'}, extra:{wedge:225,pan:'panExtra'} };
 
 // Which sector a screen point falls in, by angle from the saucer centre
-// (atan2: 0°=east, +90°=south). Top third = world, right = mode, left = extra.
+// (atan2: 0°=east, +90°=south). Top=world, right=mode, bottom=howto, left=extra.
 function sectorAt(x,y){
   const r=saucerMenu.getBoundingClientRect();
   const a=Math.atan2(y-(r.top+r.height/2),x-(r.left+r.width/2))*180/Math.PI;
-  if(a>=-150&&a<-30)return 'world';
-  if(a>=-30&&a<90)return 'mode';
+  if(a>=-135&&a<-45)return 'world';
+  if(a>=-45&&a<45)return 'mode';
+  if(a>=45&&a<135)return 'howto';
   return 'extra';
 }
 function highlight(sec){

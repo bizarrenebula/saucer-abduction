@@ -145,8 +145,10 @@ function animate(){
     // while feeding, not stuck. Handling (drag) stays the same so it still glides.
     const ACC=MOVE_ACC*(S.upSpeed||1)*(beamOn?BEAM_MOVE:1)*(buff==='speed'?1.6:1)*(World.name==='moon'?1.4:1)*(1.2-0.35*S.dayF);   // faster at night; S.upSpeed is the earned engine upgrade
     S.vel.x+=ax*ACC*dt; S.vel.z+=az*ACC*dt;
-    // drag / gradual stop with delay
-    const drag=Math.pow(World.name==='moon'?0.05:0.08,dt);
+    // drag / gradual stop with delay — high retention so the heavy hull keeps
+    // gliding when you release the stick (momentum), coasting to rest over a
+    // second or so rather than braking on a dime. Moon glides even further.
+    const drag=Math.pow(World.name==='moon'?0.58:0.42,dt);
     S.vel.x*=drag; S.vel.z*=drag;
     saucer.position.x+=S.vel.x*dt;
     saucer.position.z+=S.vel.z*dt;
@@ -204,8 +206,10 @@ function animate(){
     // ship's own frame so the tilt stays sane at any heading.
     const localVX=S.vel.x*rx+S.vel.z*rz;   // sideways speed
     const localVZ=S.vel.x*fx+S.vel.z*fz;   // forward speed
-    S.tiltZ=lerp(S.tiltZ,-localVX*0.010-S.yawV*0.16,Math.min(1,dt*4));
-    S.tiltX=lerp(S.tiltX, localVZ*0.010,Math.min(1,dt*4));
+    // Bank slowly, as a big mass leans: the roll eases in over ~0.4s instead of
+    // snapping, so the tilt lags the turn a touch and adds to the sense of weight.
+    S.tiltZ=lerp(S.tiltZ,-localVX*0.011-S.yawV*0.22,Math.min(1,dt*2.6));
+    S.tiltX=lerp(S.tiltX, localVZ*0.011,Math.min(1,dt*2.6));
     saucer.rotation.y=S.yaw;
     saucer.rotation.z=S.tiltZ; saucer.rotation.x=S.tiltX;
     saucer.userData.lights.rotation.y-=dt*1.5;
