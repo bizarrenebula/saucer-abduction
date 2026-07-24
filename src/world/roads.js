@@ -29,8 +29,10 @@ import { WATER_Y, MTN_H } from '../core/constants.js';
 import { heightAt } from './terrain.js';
 
 export const ROAD_S    = 200;   // spacing between parallel corridors
-export const ROAD_HW   = 5.5;   // half-width of the carriageway
-export const ROAD_LANE = 2.3;   // lane centre offset (vehicles drive here)
+export const ROAD_HW   = 4.0;   // half-width of the carriageway (thinner; everything
+                                // — mesh, stripes, junction node, overpass, verges —
+                                // keys off this, so roads stay uniform everywhere)
+export const ROAD_LANE = 1.65;  // lane centre offset (vehicles drive here), scaled to fit
 export const ROAD_LIFT = 0.30;  // deck sits this far proud of the ground
 export const STEP      = 6;     // path sample spacing along a road
 
